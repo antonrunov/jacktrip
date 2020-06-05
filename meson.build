@@ -8,9 +8,9 @@ conf_data = configuration_data()
 if host_machine.system() == 'linux'
 	conf_data.set('__LINUX__', true)
 elif host_machine.system() == 'osx'
-	conf_data.set('__OSX__', true)
+	conf_data.set('__MAC_OSX__', true)
 elif host_machine.system() == 'windows'
-	conf_data.set('__WINDOWS__', true)
+	conf_data.set('__WIN_32__', true)
 endif
 configure_file(output : 'config.h',
                configuration : conf_data)
