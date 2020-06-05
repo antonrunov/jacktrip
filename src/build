@@ -1,6 +1,7 @@
 #!/bin/bash
 ## Created by Juan-Pablo Caceres
 
+touch config.h
 # Check for Platform
 platform='unknown'
 unamestr=`uname`
@@ -43,3 +44,4 @@ else
     $QCMD -spec $QSPEC jacktrip.pro
     make release
 fi
+rm config.h

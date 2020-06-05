@@ -45,7 +45,8 @@
 #include <QString>
 #include <QUdpSocket>
 
-//FIXME including config.h maybe breaks qmake
+// meson generates #defines in config.h
+// build generates empty dummy config.h
 #include "config.h"
 #include "DataProtocol.h"
 #include "AudioInterface.h"
