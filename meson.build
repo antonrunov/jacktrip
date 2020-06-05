@@ -5,7 +5,13 @@ jack_dep = dependency('jack')
 rtaudio_dep = dependency('rtaudio')
 
 conf_data = configuration_data()
-conf_data.set('__LINUX__', true)
+if host_machine.system() == 'linux'
+	conf_data.set('__LINUX__', true)
+elif host_machine.system() == 'osx'
+	conf_data.set('__OSX__', true)
+elif host_machine.system() == 'windows'
+	conf_data.set('__WINDOWS__', true)
+endif
 configure_file(output : 'config.h',
                configuration : conf_data)
 
@@ -26,7 +32,6 @@ src = ['src/DataProtocol.cpp',
 	'src/JackTrip.cpp',
 	'src/jacktrip_globals.cpp',
 	'src/jacktrip_main.cpp',
-	'src/jacktrip_tests.cpp',
 	'src/JackTripThread.cpp',
 	'src/JackTripWorker.cpp',
 	'src/LoopBack.cpp',
