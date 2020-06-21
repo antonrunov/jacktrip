@@ -40,6 +40,7 @@
 #include "JackTrip.h"
 
 #include <QHostInfo>
+#include <QRandomGenerator>
 
 #include <cstring>
 #include <iostream>
@@ -85,6 +86,9 @@ UdpDataProtocol::UdpDataProtocol(JackTrip* jacktrip, const runModeT runmode,
         QObject::connect(this, SIGNAL(signalWaitingTooLong(int)),
                          jacktrip, SLOT(slotUdpWaitingTooLongClientGoneProbably(int)), Qt::QueuedConnection);
     }
+    mSimulatedLossRate = 0.0;
+    mSimulatedJitterRate = 0.0;
+    mSimulatedJitterMaxDelay = 0.0;
 }
 
 
@@ -432,7 +436,9 @@ void UdpDataProtocol::run()
     // Set realtime priority (function in jacktrip_globals.h)
     if (gVerboseFlag) std::cout << "    UdpDataProtocol:run" << mRunMode << " before setRealtimeProcessPriority()" << std::endl;
     //std::cout << "Experimental version -- not using setRealtimeProcessPriority()" << std::endl;
-    //setRealtimeProcessPriority();
+    // Anton: uncommenting setRealtimeProcessPriority, but using much lower priority value
+    // on Linux. Other platforms might require more changes.
+    setRealtimeProcessPriority();
 
     /////////////////////
     // to see thread priorities
@@ -577,7 +583,7 @@ void UdpDataProtocol::run()
 
     case SENDER : {
         //Make sure we don't start sending packets too soon.
-        QThread::msleep(100);
+        // QThread::msleep(100);
         //-----------------------------------------------------------------------------------
         while ( !mStopped )
         {
@@ -655,13 +661,28 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     receivePacket( UdpSocket, reinterpret_cast<char*>(full_redundant_packet),
                    full_redundant_packet_size);
 
+    if (0.0 < mSimulatedLossRate || 0.0 < mSimulatedJitterRate) {
+        double x = QRandomGenerator::global()->generateDouble();
+        // Drop packets
+        x -= mSimulatedLossRate;
+        if (0 > x) {
+            return;
+        }
+        // Delay packets
+        x -= mSimulatedJitterRate;
+        if (0 > x) {
+            usleep(QRandomGenerator::global()->bounded(mSimulatedJitterMaxDelay*1e6));
+        }
+    }
+
     // Get Packet Sequence Number
     newer_seq_num =
             mJackTrip->getPeerSequenceNumber(full_redundant_packet);
     current_seq_num = newer_seq_num;
 
+    int16_t lost = 0;
     if (0 != last_seq_num) {
-        int16_t lost = newer_seq_num - last_seq_num - 1;
+        lost = newer_seq_num - last_seq_num - 1;
         if (0 > lost) {
             // Out of order packet, should be ignored
             ++mOutOfOrderCount;
@@ -690,6 +711,11 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     mRevivedCount += redun_last_index;
     //cout << endl;
 
+    int gap = lost - redun_last_index;
+    if (0 < gap) {
+        mJackTrip->processPacketLoss(gap);
+    }
+
     last_seq_num = newer_seq_num; // Save last read packet
 
     // Send to audio all available audio packets, in order
@@ -716,6 +742,16 @@ bool UdpDataProtocol::getStats(DataProtocol::PktStat* stat)
     stat->revived = mRevivedCount;
     stat->statCount = mStatCount++;
     return true;
+}
+
+//*******************************************************************************
+void UdpDataProtocol::setIssueSimulation(double loss, double jitter, double max_delay)
+{
+    mSimulatedLossRate = loss;
+    mSimulatedJitterRate = jitter;
+    mSimulatedJitterMaxDelay = max_delay;
+    cout << "Simulating network issues: "
+      "loss_rate=" << loss << ", jitter_rate=" << jitter << ", jitter_max_delay=" << max_delay << endl;
 }
 
 //*******************************************************************************

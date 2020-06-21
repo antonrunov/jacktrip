@@ -143,6 +143,7 @@ public:
     virtual void run();
 
     virtual bool getStats(PktStat* stat);
+    virtual void setIssueSimulation(double loss, double jitter, double max_delay);
 
 private slots:
     void printUdpWaitedTooLong(int wait_msec);
@@ -221,6 +222,10 @@ private:
     std::atomic<uint32_t>  mOutOfOrderCount;
     std::atomic<uint32_t>  mRevivedCount;
     uint32_t  mStatCount;
+
+    double mSimulatedLossRate;
+    double mSimulatedJitterRate;
+    double mSimulatedJitterMaxDelay;
 };
 
 #endif // __UDPDATAPROTOCOL_H__

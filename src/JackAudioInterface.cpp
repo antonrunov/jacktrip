@@ -185,7 +185,12 @@ void JackAudioInterface::createChannels()
 //*******************************************************************************
 uint32_t JackAudioInterface::getSampleRate() const
 {
-    return jack_get_sample_rate(mClient);
+    uint32_t sr = jack_get_sample_rate(mClient);
+    // A temporary hack to allow clock skew simulation
+    if (1000 > abs((int)sr - 48000)) {
+        sr = 48000;
+    }
+    return sr;
 }
 
 

@@ -42,6 +42,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <stdexcept>
+#include <cmath>
 
 using std::cout; using std::endl;
 
@@ -86,8 +87,18 @@ RingBuffer::RingBuffer(int SlotSize, int NumSlots) :
     mWritePosition = ( (NumSlots/2) * SlotSize ) % mTotalSize;
     // Udpate Full Slots accordingly
     mFullSlots = (NumSlots/2);
+    mSimpleUnderrun = true;
+    mLevelDownRate = 0.01;
     mUnderruns = 0;
     mOverflows = 0;
+    mSkew0 = 0;
+    mSkewRaw = 0;
+    mLevelCur = mFullSlots;
+    mLevel = mLevelCur;
+    mBufDecOverflow = 0;
+    mBufDecPktLoss = 0;
+    mBufIncUnderrun = 0;
+    mBufIncCompensate = 0;
 }
 
 
@@ -105,6 +116,7 @@ RingBuffer::~RingBuffer()
 void RingBuffer::insertSlotBlocking(const int8_t* ptrToSlot)
 {
     QMutexLocker locker(&mMutex); // lock the mutex
+    updateReadStats();
 
     // Check if there is space available to write a slot
     // If the Ringbuffer is full, it waits for the bufferIsNotFull condition
@@ -127,6 +139,7 @@ void RingBuffer::insertSlotBlocking(const int8_t* ptrToSlot)
 void RingBuffer::readSlotBlocking(int8_t* ptrToReadSlot)
 {
     QMutexLocker locker(&mMutex); // lock the mutex
+    ++mReadsNew;
 
     // Check if there are slots available to read
     // If the Ringbuffer is empty, it waits for the bufferIsNotEmpty condition
@@ -151,6 +164,7 @@ void RingBuffer::readSlotBlocking(int8_t* ptrToReadSlot)
 void RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot)
 {
     QMutexLocker locker(&mMutex); // lock the mutex
+    updateReadStats();
 
     // Check if there is space available to write a slot
     // If the Ringbuffer is full, it returns without writing anything
@@ -177,11 +191,17 @@ void RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot)
 void RingBuffer::readSlotNonBlocking(int8_t* ptrToReadSlot)
 {
     QMutexLocker locker(&mMutex); // lock the mutex
-
+    ++mReadsNew;
+    if (mFullSlots < mLevelCur) {
+        mLevelCur = qMax((double)mFullSlots, mLevelCur-mLevelDownRate);
+    }
+    else {
+        mLevelCur = mFullSlots;
+    }
 
     // Check if there are slots available to read
     // If the Ringbuffer is empty, it returns a buffer of zeros and rests the buffer
-    if (mFullSlots == 0) {
+    if (mFullSlots <= 0) {
         // Returns a buffer of zeros if there's nothing to read
         //std::cerr << "READ UNDER-RUN NON BLOCKING = " << mNumSlots << endl;
         //std::memset(ptrToReadSlot, 0, mSlotSize);
@@ -228,7 +248,7 @@ void RingBuffer::underrunReset()
     //mFullSlots += mNumSlots/2;
     // There's nothing new to read, so we clear the whole buffer (Set the entire buffer to 0)
     std::memset(mRingBuffer, 0, mTotalSize);
-    ++mUnderruns;
+    ++mUnderrunsNew;
 }
 
 
@@ -238,9 +258,16 @@ void RingBuffer::overflowReset()
 {
     // Advance the read pointer 1/2 the ring buffer
     //mReadPosition = ( mWritePosition + ( (mNumSlots/2) * mSlotSize ) ) % mTotalSize;
-    mReadPosition = ( mReadPosition + ( (mNumSlots/2) * mSlotSize ) ) % mTotalSize;
-    mFullSlots -= mNumSlots/2;
-    mOverflows += mNumSlots/2 + 1;
+    int d = mNumSlots/2;
+    mReadPosition = ( mReadPosition + ( d * mSlotSize ) ) % mTotalSize;
+    mFullSlots -= d;
+    mOverflows += d + 1;
+    mBufDecOverflow += d + 1;
+    mLevelCur -= d;
+    int n = mFullSlots; // qMin(mFullSlots+1, mNumSlots);
+    if (n > mLevelCur) {
+        mLevelCur = n;
+    }
 }
 
 
@@ -256,11 +283,54 @@ void RingBuffer::debugDump() const
 //*******************************************************************************
 bool RingBuffer::getStats(RingBuffer::IOStat* stat, bool reset)
 {
+    QMutexLocker locker(&mMutex);
     if (reset) {
         mUnderruns = 0;
         mOverflows = 0;
+        mSkew0 = mLevel;
+        mSkewRaw = 0;
+        mBufDecOverflow = 0;
+        mBufDecPktLoss = 0;
+        mBufIncUnderrun = 0;
+        mBufIncCompensate = 0;
     }
     stat->underruns = mUnderruns;
     stat->overflows = mOverflows;
+    stat->skew = mSkew0 - mLevel + mBufIncUnderrun + mBufIncCompensate
+                        - mBufDecOverflow - mBufDecPktLoss;
+    stat->skew_raw = mSkewRaw;
+    stat->level = mLevel;
+
+    stat->buf_dec_overflows = mBufDecOverflow;
+    stat->buf_dec_pktloss = mBufDecPktLoss;
+    stat->buf_inc_underrun = mBufIncUnderrun;
+    stat->buf_inc_compensate = mBufIncCompensate;
     return true;
+}
+
+//*******************************************************************************
+void RingBuffer::processPacketLoss(int lostCount)
+{
+    QMutexLocker locker(&mMutex);
+    mBufDecPktLoss += lostCount;
+    mSkewRaw -= lostCount;
+    mLevelCur -= lostCount;
+    int n = qMin(mFullSlots+1, mNumSlots);
+    if (n > mLevelCur) {
+        mLevelCur = n;
+    }
+}
+
+//*******************************************************************************
+void RingBuffer::updateReadStats()
+{
+    --mSkewRaw;
+    mSkewRaw += mReadsNew;
+    mReadsNew = 0;
+    mUnderruns += mUnderrunsNew;
+    if (mSimpleUnderrun) {
+        mBufIncUnderrun += mUnderrunsNew;
+    }
+    mUnderrunsNew = 0;
+    mLevel = std::ceil(mLevelCur);
 }

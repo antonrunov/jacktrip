@@ -38,6 +38,7 @@
 #include "JackTrip.h"
 #include "UdpDataProtocol.h"
 #include "RingBufferWavetable.h"
+#include "JitterBuffer.h"
 #include "jacktrip_globals.h"
 #include "JackAudioInterface.h"
 #ifdef __RT_AUDIO__
@@ -226,11 +227,11 @@ void JackTrip::closeAudio()
 //*******************************************************************************
 void JackTrip::setupDataProtocol()
 {
+    double simulated_max_delay = mSimulatedDelayRel * getBufferSizeInSamples() / getSampleRate();
     // Create DataProtocol Objects
     switch (mDataProtocol) {
     case UDP:
         std::cout << "Using UDP Protocol" << std::endl;
-        std::cout << gPrintSeparator << std::endl;
         QThread::usleep(100);
         mDataProtocolSender = new UdpDataProtocol(this, DataProtocol::SENDER,
                                                   //mSenderPeerPort, mSenderBindPort,
@@ -239,6 +240,8 @@ void JackTrip::setupDataProtocol()
         mDataProtocolReceiver =  new UdpDataProtocol(this, DataProtocol::RECEIVER,
                                                      mReceiverBindPort, mReceiverPeerPort,
                                                      mRedundancy);
+        mDataProtocolReceiver->setIssueSimulation(mSimulatedLossRate, mSimulatedJitterRate, simulated_max_delay);
+        std::cout << gPrintSeparator << std::endl;
         break;
     case TCP:
         throw std::invalid_argument("TCP Protocol is not implemented");
@@ -268,6 +271,9 @@ void JackTrip::setupRingBuffers()
     /// \todo Make all this operations cleaner
     //int total_audio_packet_size = getTotalAudioPacketSizeInBytes();
     int slot_size = getRingBuffersSlotSize();
+    if (-1 != mBufferStrategy) {
+        mUnderRunMode = ZEROS;
+    }
 
     switch (mUnderRunMode) {
     case WAVETABLE:
@@ -286,8 +292,15 @@ void JackTrip::setupRingBuffers()
     case ZEROS:
         mSendRingBuffer = new RingBuffer(slot_size,
                                          gDefaultOutputQueueLength);
-        mReceiveRingBuffer = new RingBuffer(slot_size,
-                                            mBufferQueueLength);
+        if (0 > mBufferStrategy) {
+            mReceiveRingBuffer = new RingBuffer(slot_size,
+                                                mBufferQueueLength);
+        }
+        else {
+            cout << "Using JitterBuffer strategy " << mBufferStrategy << endl;
+            mReceiveRingBuffer = new JitterBuffer(slot_size,
+                                  mBufferQueueLength, mBufferStrategy);
+        }
         /*
     mSendRingBuffer = new RingBuffer(mAudioInterface->getSizeInBytesPerChannel() * mNumChans,
              gDefaultOutputQueueLength);
@@ -466,8 +479,6 @@ void JackTrip::onStatTimer()
         return;
     }
     QString now = QDateTime::currentDateTime().toString(Qt::ISODate);
-    int32_t skew = recv_io_stat.underruns - recv_io_stat.overflows
-                - pkt_stat.lost + pkt_stat.revived;
 
     static QMutex mutex;
     QMutexLocker locker(&mutex);
@@ -485,7 +496,14 @@ void JackTrip::onStatTimer()
       << "/" << pkt_stat.revived
       << " tot: "
       << pkt_stat.tot
-      << " skew: " << skew
+      << " sync: "
+      << recv_io_stat.level
+      << "/" << recv_io_stat.buf_inc_underrun
+      << "/" << recv_io_stat.buf_inc_compensate
+      << "/" << recv_io_stat.buf_dec_overflows
+      << "/" << recv_io_stat.buf_dec_pktloss
+      << " skew: " << recv_io_stat.skew
+      << "/" << recv_io_stat.skew_raw
       << endl;
 }
 

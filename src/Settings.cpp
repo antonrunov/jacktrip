@@ -70,6 +70,7 @@ Settings::Settings() :
     mBindPortNum(gDefaultPort), mPeerPortNum(gDefaultPort),
     mClientName(NULL),
     mUnderrrunZero(false),
+    mBufferStrategy(-1),
     mLoopBack(false),
     #ifdef WAIR // WAIR
     mNumNetRevChans(0),
@@ -86,7 +87,10 @@ Settings::Settings() :
     mChanfeDefaultBS(false),
     mHubConnectionMode(JackTrip::SERVERTOCLIENT),
     mConnectDefaultAudioPorts(true),
-    mIOStatTimeout(0)
+    mIOStatTimeout(0),
+    mSimulatedLossRate(0.0),
+    mSimulatedJitterRate(0.0),
+    mSimulatedDelayRel(0.0)
 {}
 
 //*******************************************************************************
@@ -99,6 +103,8 @@ Settings::~Settings()
 //*******************************************************************************
 void Settings::parseInput(int argc, char** argv)
 {
+    // Always use decimal point for floating point numbers
+    setlocale( LC_NUMERIC, "C" );
     // If no command arguments are given, print instructions
     if(argc == 1) {
         printUsage();
@@ -143,6 +149,9 @@ void Settings::parseInput(int argc, char** argv)
     { "hubpatch", required_argument, NULL, 'p' }, // Set hubConnectionMode for auto patch in Jack
     { "iostat", required_argument, NULL, 'I' }, // Set IO stat timeout
     { "iostatlog", required_argument, NULL, 'G' }, // Set IO stat log file
+    { "bufstrategy", required_argument, NULL, 1001 }, // Set IO stat log file
+    { "simloss", required_argument, NULL, 1002 },
+    { "simjitter", required_argument, NULL, 1003 },
     { "help", no_argument, NULL, 'h' }, // Print Help
     { NULL, 0, NULL, 0 }
 };
@@ -338,6 +347,27 @@ void Settings::parseInput(int argc, char** argv)
                 std::exit(1);
             }
             break;
+        case 1001: // Buf strategy
+            mBufferStrategy = atoi(optarg);
+            if (-1 > mBufferStrategy || 2 < mBufferStrategy) {
+                std::cerr << "Unsupported buffer strategy " << optarg << endl;
+                printUsage();
+                std::exit(1);
+            }
+            break;
+        case 1002: // Simulate packet loss
+            mSimulatedLossRate = atof(optarg);
+            break;
+        case 1003: // Simulate jitter
+            char* endp;
+            mSimulatedJitterRate = strtod(optarg, &endp);
+            if (0 == *endp) {
+                mSimulatedDelayRel = 1.0;
+            }
+            else {
+                mSimulatedDelayRel = atof(endp+1);
+            }
+            break;
         case 'h':
             //-------------------------------------------------------
             printUsage();
@@ -409,6 +439,7 @@ void Settings::printUsage()
     cout << " --clientname                             Change default client name (default: JackTrip)" << endl;
     cout << " --localaddress                           Change default local host IP address (default: 127.0.0.1)" << endl;
     cout << " --nojackportsconnect                     Don't connect default audio ports in jack" << endl;
+    cout << " --bufstrategy     # (0, 1, 2)            Use alternative jitter buffer" << endl;
     cout << endl;
     cout << "ARGUMENTS TO USE JACKTRIP WITHOUT JACK:" << endl;
     cout << " --rtaudio                                Use system's default sound system instead of Jack" << endl;
@@ -417,8 +448,12 @@ void Settings::printUsage()
     cout << "   --deviceid      #                      The rtaudio device id --rtaudio mode only (default: 0)" << endl;
     cout << endl;
     cout << "ARGUMENTS TO DISPLAY IO STATISTICS:" << endl;
-    cout << "   --iostat <time_in_secs>                Turn on IO stat reporting with specified interval (in seconds)" << endl;
-    cout << "   --iostatlog <log_file>                 Save stat log into a file (default: print in stdout)" << endl;
+    cout << " --iostat <time_in_secs>                  Turn on IO stat reporting with specified interval (in seconds)" << endl;
+    cout << " --iostatlog <log_file>                   Save stat log into a file (default: print in stdout)" << endl;
+    cout << endl;
+    cout << "ARGUMENTS TO SIMULATE NETWORK ISSUES:" << endl;
+    cout << " --simloss <rate>                         Simulate packet loss" << endl;
+    cout << " --simjitter <rate>,<d>                   Simulate jitter, d is max delay in packets" << endl;
     cout << endl;
     cout << "HELP ARGUMENTS: " << endl;
     cout << " -v, --version                            Prints Version Number" << endl;
@@ -550,6 +585,9 @@ void Settings::startJackTrip()
         if (mChanfeDefaultBS) {
             mJackTrip->setAudioBufferSizeInSamples(mAudioBufferSize);
         }
+        mJackTrip->setBufferStrategy(getBufferStrategy());
+        mJackTrip->setNetIssuesSimulation(getSimulatedLossRate(),
+            getSimulatedJitterRate(), getSimulatedDelayRel());
 
         // Add Plugins
         if ( mLoopBack ) {

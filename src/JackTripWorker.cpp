@@ -206,6 +206,9 @@ void JackTripWorker::run()
         jacktrip.setPeerAddress(mClientAddress.toLatin1().constData());
         jacktrip.setBindPorts(mServerPort);
         //jacktrip.setPeerPorts(mClientPort);
+        jacktrip.setBufferStrategy(settings->getBufferStrategy());
+        jacktrip.setNetIssuesSimulation(settings->getSimulatedLossRate(),
+            settings->getSimulatedJitterRate(), settings->getSimulatedDelayRel());
 
         if (gVerboseFlag) cout << "---> JackTripWorker: setJackTripFromClientHeader..." << endl;
         int PeerConnectionMode = setJackTripFromClientHeader(jacktrip);

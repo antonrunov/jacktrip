@@ -198,6 +198,8 @@ public:
     /// \brief Sets (override) Buffer Queue Length Mode after construction
     virtual void setBufferQueueLength(int BufferQueueLength)
     { mBufferQueueLength = BufferQueueLength; }
+    virtual void setBufferStrategy(int BufferStrategy)
+    { mBufferStrategy = BufferStrategy; }
     /// \brief Sets (override) Audio Bit Resolution after construction
     virtual void setAudioBitResolution(AudioInterface::audioBitResolutionT AudioBitResolution)
     { mAudioBitResolution = AudioBitResolution; }
@@ -324,6 +326,8 @@ public:
     { mSendRingBuffer->readSlotBlocking(ptrToReadSlot); }
     virtual void writeAudioBuffer(const int8_t* ptrToSlot)
     { mReceiveRingBuffer->insertSlotNonBlocking(ptrToSlot); }
+    virtual void processPacketLoss(int lostCount)
+    { mReceiveRingBuffer->processPacketLoss(lostCount); }
     uint32_t getBufferSizeInSamples() const
     { return mAudioBufferSize; /*return mAudioInterface->getBufferSizeInSamples();*/ }
     uint32_t getDeviceID() const
@@ -393,6 +397,13 @@ public:
     void printTextTest2() {std::cout << "=== JackTrip PRINT2 ===" << std::endl;}
 
     void startIOStatTimer(int timeout_sec, const std::ostream& log_stream);
+
+    void setNetIssuesSimulation(double loss, double jitter, double delay_rel)
+    {
+        mSimulatedLossRate = loss;
+        mSimulatedJitterRate = jitter;
+        mSimulatedDelayRel = delay_rel;
+    }
 
 public slots:
     /// \brief Slot to stop all the processes and threads
@@ -474,6 +485,7 @@ private:
     int mNumNetRevChans; ///< Number of Network Audio Channels (net comb filters)
 #endif // endwhere
     int mBufferQueueLength; ///< Audio Buffer from network queue length
+    int mBufferStrategy;
     uint32_t mSampleRate; ///< Sample Rate
     uint32_t mDeviceID; ///< RTAudio DeviceID
     uint32_t mAudioBufferSize; ///< Audio buffer size to process on each callback
@@ -513,6 +525,9 @@ private:
 
     bool mConnectDefaultAudioPorts; ///< Connect or not default audio ports
     std::ostream mIOStatLogStream;
+    double mSimulatedLossRate;
+    double mSimulatedJitterRate;
+    double mSimulatedDelayRel;
 };
 
 #endif

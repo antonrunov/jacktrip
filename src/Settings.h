@@ -75,6 +75,10 @@ public:
     {
         return mIOStatStream.is_open() ? (std::ostream&)mIOStatStream : std::cout;
     }
+    int getBufferStrategy() const {return mBufferStrategy;}
+    double getSimulatedLossRate() const {return  mSimulatedLossRate;}
+    double getSimulatedJitterRate() const {return mSimulatedJitterRate;}
+    double getSimulatedDelayRel() const {return mSimulatedDelayRel;}
 
 
 public slots:
@@ -96,6 +100,7 @@ private:
     int mPeerPortNum; ///< Peer Port Number
     char* mClientName; ///< JackClient Name
     bool mUnderrrunZero; ///< Use Underrun to Zero mode
+    int mBufferStrategy;
 
 #ifdef WAIR // wair
     int mNumNetRevChans; ///< Number of Network Audio Channels (net comb filters)
@@ -121,6 +126,9 @@ private:
     bool mConnectDefaultAudioPorts; ///< Connect or not jack audio ports
     int mIOStatTimeout;
     std::ofstream mIOStatStream;
+    double mSimulatedLossRate;
+    double mSimulatedJitterRate;
+    double mSimulatedDelayRel;
 };
 
 #endif

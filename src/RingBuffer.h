@@ -93,7 +93,7 @@ public:
     /** \brief Same as insertSlotBlocking but non-blocking (asynchronous)
    * \param ptrToSlot Pointer to slot to insert into the RingBuffer
    */
-    void insertSlotNonBlocking(const int8_t* ptrToSlot);
+    virtual void insertSlotNonBlocking(const int8_t* ptrToSlot);
 
     /** \brief Same as readSlotBlocking but non-blocking (asynchronous)
    * \param ptrToReadSlot Pointer to read slot from the RingBuffer
@@ -103,8 +103,16 @@ public:
     struct IOStat {
         uint32_t underruns;
         uint32_t overflows;
+        int32_t skew;
+        int32_t skew_raw;
+        int32_t level;
+        uint32_t buf_dec_overflows;
+        uint32_t buf_dec_pktloss;
+        uint32_t buf_inc_underrun;
+        uint32_t buf_inc_compensate;
     };
     virtual bool getStats(IOStat* stat, bool reset);
+    virtual void processPacketLoss(int lostCount);
 
 protected:
 
@@ -122,14 +130,16 @@ protected:
    */
     virtual void setMemoryInReadSlotWithLastReadSlot(int8_t* ptrToReadSlot);
 
-private:
-
     /// \brief Resets the ring buffer for reads under-runs non-blocking
-    void underrunReset();
-    /// \brief Resets the ring buffer for writes over-flows non-blocking
-    void overflowReset();
+    virtual void underrunReset();
+    /** \brief Resets the ring buffer for writes over-flows non-blocking
+     *
+     * Return value indicates if the current buffer can be processed
+     */
+    virtual void overflowReset();
     /// \brief Helper method to debug, prints member variables to terminal
     void debugDump() const;
+    void updateReadStats();
 
     const int mSlotSize; ///< The size of one slot in byes
     const int mNumSlots; ///< Number of Slots
@@ -144,8 +154,25 @@ private:
     QMutex mMutex; ///< Mutex to protect read and write operations
     QWaitCondition mBufferIsNotFull; ///< Buffer not full condition to monitor threads
     QWaitCondition mBufferIsNotEmpty; ///< Buffer not empty condition to monitor threads
-    std::atomic<uint32_t> mUnderruns;
-    std::atomic<uint32_t> mOverflows;
+
+    // IO stat
+    bool mSimpleUnderrun;
+    uint32_t mUnderruns;
+    uint32_t mOverflows;
+    int32_t  mSkewRaw;
+    double   mLevelCur;
+    double   mLevelDownRate;
+    int32_t  mLevel;
+
+    uint32_t mBufDecOverflow;
+    uint32_t mBufDecPktLoss;
+    uint32_t mBufIncUnderrun;
+    uint32_t mBufIncCompensate;
+
+    // temp counters for reads
+    uint32_t mReadsNew;
+    uint32_t mUnderrunsNew;
+    int32_t  mSkew0;
 };
 
 #endif
