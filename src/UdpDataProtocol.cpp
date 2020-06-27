@@ -582,9 +582,6 @@ void UdpDataProtocol::run()
         break; }
 
     case SENDER : {
-        //Make sure we don't start sending packets too soon.
-        // QThread::msleep(100);
-        //-----------------------------------------------------------------------------------
         while ( !mStopped )
         {
             // OLD CODE WITHOUT REDUNDANCY -----------------------------------------------------
