@@ -319,15 +319,13 @@ public:
     virtual int getPacketSizeInBytes();
     void parseAudioPacket(int8_t* full_packet, int8_t* audio_packet);
     virtual void sendNetworkPacket(const int8_t* ptrToSlot)
-    { mSendRingBuffer->insertSlotNonBlocking(ptrToSlot); }
+    { mSendRingBuffer->insertSlotNonBlocking(ptrToSlot, 0, 0); }
     virtual void receiveNetworkPacket(int8_t* ptrToReadSlot)
     { mReceiveRingBuffer->readSlotNonBlocking(ptrToReadSlot); }
     virtual void readAudioBuffer(int8_t* ptrToReadSlot)
     { mSendRingBuffer->readSlotBlocking(ptrToReadSlot); }
-    virtual void writeAudioBuffer(const int8_t* ptrToSlot)
-    { mReceiveRingBuffer->insertSlotNonBlocking(ptrToSlot); }
-    virtual void processPacketLoss(int lostCount)
-    { mReceiveRingBuffer->processPacketLoss(lostCount); }
+    virtual bool writeAudioBuffer(const int8_t* ptrToSlot, int len, int lostLen)
+    { return mReceiveRingBuffer->insertSlotNonBlocking(ptrToSlot, len, lostLen); }
     uint32_t getBufferSizeInSamples() const
     { return mAudioBufferSize; /*return mAudioInterface->getBufferSizeInSamples();*/ }
     uint32_t getDeviceID() const

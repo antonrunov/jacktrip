@@ -429,14 +429,12 @@ void UdpDataProtocol::run()
     // (Algorithm explained at the end of this file)
     // ---------------------------------------------
     int full_redundant_packet_size = full_packet_size * mUdpRedundancyFactor;
-    int8_t* full_redundant_packet;
-    full_redundant_packet = new int8_t[full_redundant_packet_size];
-    std::memset(full_redundant_packet, 0, full_redundant_packet_size); // Initialize to 0
+    int8_t* full_redundant_packet = NULL;
 
     // Set realtime priority (function in jacktrip_globals.h)
     if (gVerboseFlag) std::cout << "    UdpDataProtocol:run" << mRunMode << " before setRealtimeProcessPriority()" << std::endl;
     //std::cout << "Experimental version -- not using setRealtimeProcessPriority()" << std::endl;
-    // Anton: uncommenting setRealtimeProcessPriority, but using much lower priority value
+    // Anton Runov: uncommenting setRealtimeProcessPriority below, but using much lower priority value
     // on Linux. Other platforms might require more changes.
     setRealtimeProcessPriority();
 
@@ -518,19 +516,23 @@ void UdpDataProtocol::run()
             QThread::msleep(100);
             if (gVerboseFlag) std::cout << "100ms  " << std::flush;
         }
-        int first_packet_size = UdpSocket.pendingDatagramSize();
-        // The following line is the same as
-        int8_t* first_packet = new int8_t[first_packet_size];
-        /// \todo fix this to avoid memory leaks
-        // but avoids memory leaks
-        //std::tr1::shared_ptr<int8_t> first_packet(new int8_t[first_packet_size]);
-        receivePacket( UdpSocket, reinterpret_cast<char*>(first_packet), first_packet_size);
+        full_redundant_packet_size = UdpSocket.pendingDatagramSize();
+        full_redundant_packet = new int8_t[full_redundant_packet_size];
+        receivePacket( UdpSocket, reinterpret_cast<char*>(full_redundant_packet), full_redundant_packet_size);
         // Check that peer has the same audio settings
         if (gVerboseFlag) std::cout << std::endl << "    UdpDataProtocol:run" << mRunMode << " before mJackTrip->checkPeerSettings()" << std::endl;
-        mJackTrip->checkPeerSettings(first_packet);
+        mJackTrip->checkPeerSettings(full_redundant_packet);
+
+        full_packet_size = mJackTrip->getHeaderSizeInBytes() + mJackTrip->getPeerBufferSize(full_redundant_packet) * mJackTrip->getNumChannels() * (mJackTrip->getAudioBitResolution()/8);
+        /*
+        cout << "peer sizes: " << mJackTrip->getHeaderSizeInBytes()
+             << " + " << mJackTrip->getPeerBufferSize(full_redundant_packet)
+             << " * " << mJackTrip->getNumChannels() << " * " << (int)mJackTrip->getAudioBitResolution()/8 << endl;
+        cout << "full_packet_size: " << full_packet_size << " / " << mJackTrip->getPacketSizeInBytes() << endl;
+        */
+
         if (gVerboseFlag) std::cout << "step 7" << std::endl;
         if (gVerboseFlag) std::cout << "    UdpDataProtocol:run" << mRunMode << " before mJackTrip->parseAudioPacket()" << std::endl;
-        mJackTrip->parseAudioPacket(mFullPacket, mAudioPacket);
         std::cout << "Received Connection from Peer!" << std::endl;
         emit signalReceivedConnectionFromPeer();
 
@@ -582,6 +584,8 @@ void UdpDataProtocol::run()
         break; }
 
     case SENDER : {
+        full_redundant_packet = new int8_t[full_redundant_packet_size];
+        std::memset(full_redundant_packet, 0, full_redundant_packet_size); // Initialize to 0
         while ( !mStopped )
         {
             // OLD CODE WITHOUT REDUNDANCY -----------------------------------------------------
@@ -599,6 +603,11 @@ void UdpDataProtocol::run()
                                  full_packet_size);
         }
         break; }
+    }
+
+    if (NULL != full_redundant_packet) {
+        delete full_redundant_packet;
+        full_redundant_packet = NULL;
     }
 }
 
@@ -708,20 +717,22 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     mRevivedCount += redun_last_index;
     //cout << endl;
 
-    int gap = lost - redun_last_index;
-    if (0 < gap) {
-        mJackTrip->processPacketLoss(gap);
-    }
+    int hdr_size = mJackTrip->getHeaderSizeInBytes();
+    int pkt_buf_size = full_packet_size - hdr_size;
+    int gap_size = (0 == last_seq_num) ? 0 : (lost - redun_last_index) * pkt_buf_size;
 
     last_seq_num = newer_seq_num; // Save last read packet
 
     // Send to audio all available audio packets, in order
     for (int i = redun_last_index; i>=0; i--) {
-        memcpy(mFullPacket,
-               full_redundant_packet + (i*full_packet_size),
-               full_packet_size);
-        mJackTrip->parseAudioPacket(mFullPacket, mAudioPacket);
-        mJackTrip->writeAudioBuffer(mAudioPacket);
+        if (!mJackTrip->writeAudioBuffer(full_redundant_packet + (i*full_packet_size) + hdr_size,
+                pkt_buf_size, gap_size)) {
+            emit signalError("Local and Peer buffer settings are incompatible");
+            cout << "ERROR: Local and Peer buffer settings are incompatible" << endl;
+            mStopped = true;
+            break;
+        }
+        gap_size = 0;
     }
 }
 

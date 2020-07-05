@@ -93,12 +93,12 @@ public:
     /** \brief Same as insertSlotBlocking but non-blocking (asynchronous)
    * \param ptrToSlot Pointer to slot to insert into the RingBuffer
    */
-    virtual void insertSlotNonBlocking(const int8_t* ptrToSlot);
+    virtual bool insertSlotNonBlocking(const int8_t* ptrToSlot, int len, int lostLen);
 
     /** \brief Same as readSlotBlocking but non-blocking (asynchronous)
    * \param ptrToReadSlot Pointer to read slot from the RingBuffer
    */
-    void readSlotNonBlocking(int8_t* ptrToReadSlot);
+    virtual void readSlotNonBlocking(int8_t* ptrToReadSlot);
 
     struct IOStat {
         uint32_t underruns;
@@ -112,7 +112,6 @@ public:
         uint32_t buf_inc_compensate;
     };
     virtual bool getStats(IOStat* stat, bool reset);
-    virtual void processPacketLoss(int lostCount);
 
 protected:
 
@@ -131,21 +130,18 @@ protected:
     virtual void setMemoryInReadSlotWithLastReadSlot(int8_t* ptrToReadSlot);
 
     /// \brief Resets the ring buffer for reads under-runs non-blocking
-    virtual void underrunReset();
-    /** \brief Resets the ring buffer for writes over-flows non-blocking
-     *
-     * Return value indicates if the current buffer can be processed
-     */
-    virtual void overflowReset();
+    void underrunReset();
+    /// \brief Resets the ring buffer for writes over-flows non-blocking
+    void overflowReset();
     /// \brief Helper method to debug, prints member variables to terminal
     void debugDump() const;
     void updateReadStats();
 
-    const int mSlotSize; ///< The size of one slot in byes
-    const int mNumSlots; ///< Number of Slots
-    const int mTotalSize; ///< Total size of the mRingBuffer = mSlotSize*mNumSlotss
-    int mReadPosition; ///< Read Positions in the RingBuffer (Tail)
-    int mWritePosition; ///< Write Position in the RingBuffer (Head)
+    /*const*/ int mSlotSize; ///< The size of one slot in byes
+    /*const*/ int mNumSlots; ///< Number of Slots
+    /*const*/ int mTotalSize; ///< Total size of the mRingBuffer = mSlotSize*mNumSlotss
+    uint32_t mReadPosition; ///< Read Positions in the RingBuffer (Tail)
+    uint32_t mWritePosition; ///< Write Position in the RingBuffer (Head)
     int mFullSlots; ///< Number of used (full) slots, in slot-size
     int8_t* mRingBuffer; ///< 8-bit array of data (1-byte)
     int8_t* mLastReadSlot; ///< Last slot read
@@ -156,7 +152,7 @@ protected:
     QWaitCondition mBufferIsNotEmpty; ///< Buffer not empty condition to monitor threads
 
     // IO stat
-    bool mSimpleUnderrun;
+    int mStatUnit;
     uint32_t mUnderruns;
     uint32_t mOverflows;
     int32_t  mSkewRaw;

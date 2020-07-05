@@ -43,21 +43,22 @@
 class JitterBuffer : public RingBuffer
 {
 public:
-    JitterBuffer(int slot_size, int num_slots, int strategy);
+    JitterBuffer(int slot_size, int max_latency, int total_size, int strategy);
     virtual ~JitterBuffer() {}
 
-    virtual void insertSlotNonBlocking(const int8_t* ptrToSlot);
-    virtual void processPacketLoss(int lostCount);
+    virtual bool insertSlotNonBlocking(const int8_t* ptrToSlot, int len, int lostLen);
+    virtual void readSlotNonBlocking(int8_t* ptrToReadSlot);
 
 protected:
-    virtual void underrunReset();
-    virtual void overflowReset();
+    void processPacketLoss(int lostLen);
 
-    bool pushEmptyBlock();
+protected:
+    int mMaxLatency;
+    bool mActive;
 
     double mUnderrunIncTolerance;
     double mCorrIncTolerance;
-    bool   mSimplePacketLoss;
+    double mOverflowDecTolerance;
     int    mOverflowDropStep;
 };
 

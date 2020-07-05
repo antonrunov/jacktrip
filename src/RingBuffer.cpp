@@ -55,40 +55,43 @@ RingBuffer::RingBuffer(int SlotSize, int NumSlots) :
     mReadPosition(0),
     mWritePosition(0),
     mFullSlots(0),
-    mRingBuffer(new int8_t[mTotalSize]),
-    mLastReadSlot(new int8_t[mSlotSize])
+    mRingBuffer(NULL),
+    mLastReadSlot(NULL)
 {
-    //QMutexLocker locker(&mMutex); // lock the mutex
+    if (0 < mTotalSize) {
+        mRingBuffer = new int8_t[mTotalSize];
+        mLastReadSlot = new int8_t[mSlotSize];
+        //QMutexLocker locker(&mMutex); // lock the mutex
 
-    // Verify if there's enough space to for the buffers
-    if ( (mRingBuffer == NULL) || (mLastReadSlot == NULL) ) {
-        //std::cerr << "ERROR: RingBuffer out of memory!" << endl;
-        //std::cerr << "Exiting program..." << endl;
-        //std::exit(1);
-        throw std::length_error("RingBuffer out of memory!");
+        // Verify if there's enough space to for the buffers
+        if ( (mRingBuffer == NULL) || (mLastReadSlot == NULL) ) {
+            //std::cerr << "ERROR: RingBuffer out of memory!" << endl;
+            //std::cerr << "Exiting program..." << endl;
+            //std::exit(1);
+            throw std::length_error("RingBuffer out of memory!");
+        }
+
+        // Set the buffers to zeros
+        /*
+      for (int i=0; i<mTotalSize; i++) {
+        mRingBuffer[i] = 0;    // Initialize all elements to zero.
+      }
+      */
+        std::memset(mRingBuffer, 0, mTotalSize); // set buffer to 0
+        /*
+      for (int i=0; i<mSlotSize; i++) {
+        mLastReadSlot[i] = 0;    // Initialize all elements to zero.
+      }
+      */
+        std::memset(mLastReadSlot, 0, mSlotSize); // set buffer to 0
+        mWritePosition = ( (NumSlots/2) * SlotSize ) % mTotalSize;
     }
 
-    // Set the buffers to zeros
-    /*
-  for (int i=0; i<mTotalSize; i++) {
-    mRingBuffer[i] = 0;    // Initialize all elements to zero.
-  }
-  */
-    std::memset(mRingBuffer, 0, mTotalSize); // set buffer to 0
-    /*
-  for (int i=0; i<mSlotSize; i++) {
-    mLastReadSlot[i] = 0;    // Initialize all elements to zero.
-  }
-  */
-    std::memset(mLastReadSlot, 0, mSlotSize); // set buffer to 0
-
-
     // Advance write position to half of the RingBuffer
-    mWritePosition = ( (NumSlots/2) * SlotSize ) % mTotalSize;
     // Udpate Full Slots accordingly
     mFullSlots = (NumSlots/2);
-    mSimpleUnderrun = true;
     mLevelDownRate = 0.01;
+    mStatUnit = 1;
     mUnderruns = 0;
     mOverflows = 0;
     mSkew0 = 0;
@@ -161,9 +164,19 @@ void RingBuffer::readSlotBlocking(int8_t* ptrToReadSlot)
 
 
 //*******************************************************************************
-void RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot)
+bool RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot, int len, int lostLen)
 {
+    if (len != mSlotSize && 0 != len) {
+        // RingBuffer does not suppport mixed buf sizes
+        return false;
+    }
     QMutexLocker locker(&mMutex); // lock the mutex
+    if (0 < lostLen) {
+        int lostCount = lostLen / mSlotSize;
+        mBufDecPktLoss += lostCount;
+        mSkewRaw -= lostCount;
+        mLevelCur -= lostCount;
+    }
     updateReadStats();
 
     // Check if there is space available to write a slot
@@ -174,7 +187,7 @@ void RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot)
     if (mFullSlots == mNumSlots) {
         //std::cout << "OUPUT OVERFLOW NON BLOCKING = " << mNumSlots << std::endl;
         overflowReset();
-        return;
+        return true;
     }
 
     // Copy mSlotSize bytes to mRingBuffer
@@ -184,6 +197,7 @@ void RingBuffer::insertSlotNonBlocking(const int8_t* ptrToSlot)
     mFullSlots++; //update full slots
     // Wake threads waitng for bufferIsNotFull condition
     mBufferIsNotEmpty.wakeAll();
+    return true;
 }
 
 
@@ -258,16 +272,12 @@ void RingBuffer::overflowReset()
 {
     // Advance the read pointer 1/2 the ring buffer
     //mReadPosition = ( mWritePosition + ( (mNumSlots/2) * mSlotSize ) ) % mTotalSize;
-    int d = mNumSlots/2;
+    int d = mNumSlots / 2;
     mReadPosition = ( mReadPosition + ( d * mSlotSize ) ) % mTotalSize;
     mFullSlots -= d;
     mOverflows += d + 1;
     mBufDecOverflow += d + 1;
     mLevelCur -= d;
-    int n = mFullSlots; // qMin(mFullSlots+1, mNumSlots);
-    if (n > mLevelCur) {
-        mLevelCur = n;
-    }
 }
 
 
@@ -294,31 +304,18 @@ bool RingBuffer::getStats(RingBuffer::IOStat* stat, bool reset)
         mBufIncUnderrun = 0;
         mBufIncCompensate = 0;
     }
-    stat->underruns = mUnderruns;
-    stat->overflows = mOverflows;
-    stat->skew = mSkew0 - mLevel + mBufIncUnderrun + mBufIncCompensate
-                        - mBufDecOverflow - mBufDecPktLoss;
-    stat->skew_raw = mSkewRaw;
-    stat->level = mLevel;
+    stat->underruns = mUnderruns / mStatUnit;
+    stat->overflows = mOverflows / mStatUnit;
+    stat->skew = (int32_t)((mSkew0 - mLevel + mBufIncUnderrun + mBufIncCompensate
+                        - mBufDecOverflow - mBufDecPktLoss)) / mStatUnit;
+    stat->skew_raw = mSkewRaw / mStatUnit;
+    stat->level = mLevel / mStatUnit;
 
-    stat->buf_dec_overflows = mBufDecOverflow;
-    stat->buf_dec_pktloss = mBufDecPktLoss;
-    stat->buf_inc_underrun = mBufIncUnderrun;
-    stat->buf_inc_compensate = mBufIncCompensate;
+    stat->buf_dec_overflows = mBufDecOverflow / mStatUnit;
+    stat->buf_dec_pktloss = mBufDecPktLoss / mStatUnit;
+    stat->buf_inc_underrun = mBufIncUnderrun / mStatUnit;
+    stat->buf_inc_compensate = mBufIncCompensate / mStatUnit;
     return true;
-}
-
-//*******************************************************************************
-void RingBuffer::processPacketLoss(int lostCount)
-{
-    QMutexLocker locker(&mMutex);
-    mBufDecPktLoss += lostCount;
-    mSkewRaw -= lostCount;
-    mLevelCur -= lostCount;
-    int n = qMin(mFullSlots+1, mNumSlots);
-    if (n > mLevelCur) {
-        mLevelCur = n;
-    }
 }
 
 //*******************************************************************************
@@ -328,9 +325,7 @@ void RingBuffer::updateReadStats()
     mSkewRaw += mReadsNew;
     mReadsNew = 0;
     mUnderruns += mUnderrunsNew;
-    if (mSimpleUnderrun) {
-        mBufIncUnderrun += mUnderrunsNew;
-    }
+    mBufIncUnderrun += mUnderrunsNew;
     mUnderrunsNew = 0;
     mLevel = std::ceil(mLevelCur);
 }

@@ -240,7 +240,9 @@ void JackTrip::setupDataProtocol()
         mDataProtocolReceiver =  new UdpDataProtocol(this, DataProtocol::RECEIVER,
                                                      mReceiverBindPort, mReceiverPeerPort,
                                                      mRedundancy);
-        mDataProtocolReceiver->setIssueSimulation(mSimulatedLossRate, mSimulatedJitterRate, simulated_max_delay);
+        if (0.0 < mSimulatedLossRate || 0.0 < mSimulatedJitterRate || 0.0 < simulated_max_delay) {
+            mDataProtocolReceiver->setIssueSimulation(mSimulatedLossRate, mSimulatedJitterRate, simulated_max_delay);
+        }
         std::cout << gPrintSeparator << std::endl;
         break;
     case TCP:
@@ -297,9 +299,11 @@ void JackTrip::setupRingBuffers()
                                                 mBufferQueueLength);
         }
         else {
-            cout << "Using JitterBuffer strategy " << mBufferStrategy << endl;
-            mReceiveRingBuffer = new JitterBuffer(slot_size,
-                                  mBufferQueueLength, mBufferStrategy);
+            int total_size = mSampleRate * mNumChans * mAudioBitResolution; // 1 sec of audio
+            cout << "Using JitterBuffer strategy " << mBufferStrategy
+                 << ", total_size=" << total_size << endl;
+            mReceiveRingBuffer = new JitterBuffer(slot_size, mBufferQueueLength*slot_size,
+                                                                total_size, mBufferStrategy);
         }
         /*
     mSendRingBuffer = new RingBuffer(mAudioInterface->getSizeInBytesPerChannel() * mNumChans,
@@ -381,8 +385,8 @@ void JackTrip::startProcess(
 
     //QObject::connect(mDataProtocolSender, SIGNAL(signalError(const char*)),
     //                 this, SLOT(slotStopProcesses()), Qt::QueuedConnection);
-    //QObject::connect(mDataProtocolReceiver, SIGNAL(signalError(const char*)),
-    //                 this, SLOT(slotStopProcesses()), Qt::QueuedConnection);
+    QObject::connect(mDataProtocolReceiver, SIGNAL(signalError(const char*)),
+                     this, SLOT(slotStopProcesses()), Qt::QueuedConnection);
 
     // Start the threads for the specific mode
     // ---------------------------------------
