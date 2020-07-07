@@ -44,6 +44,7 @@
 #include <QUdpSocket>
 #include <QHostAddress>
 #include <QMutex>
+#include <vector>
 
 #include "DataProtocol.h"
 #include "jacktrip_types.h"
@@ -213,6 +214,9 @@ private:
 
     int8_t* mAudioPacket; ///< Buffer to store Audio Packets
     int8_t* mFullPacket; ///< Buffer to store Full Packet (audio+header)
+    std::vector<int8_t> mBuffer;
+    int m_chans;
+    int m_smplSize;
 
     unsigned int mUdpRedundancyFactor; ///< Factor of redundancy
     static QMutex sUdpMutex; ///< Mutex to make thread safe the binding process

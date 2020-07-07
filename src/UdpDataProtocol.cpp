@@ -413,6 +413,9 @@ void UdpDataProtocol::run()
     //cout << "audio_packet_size: " << audio_packet_size << endl;
     mAudioPacket = new int8_t[audio_packet_size];
     std::memset(mAudioPacket, 0, audio_packet_size); // set buffer to 0
+    mBuffer.resize(audio_packet_size, 0);
+    m_chans = mJackTrip->getNumChannels();
+    m_smplSize = mJackTrip->getAudioBitResolution() / 8;
 
     // Setup Full Packet buffer
     int full_packet_size = mJackTrip->getPacketSizeInBytes();
@@ -523,7 +526,9 @@ void UdpDataProtocol::run()
         if (gVerboseFlag) std::cout << std::endl << "    UdpDataProtocol:run" << mRunMode << " before mJackTrip->checkPeerSettings()" << std::endl;
         mJackTrip->checkPeerSettings(full_redundant_packet);
 
-        full_packet_size = mJackTrip->getHeaderSizeInBytes() + mJackTrip->getPeerBufferSize(full_redundant_packet) * mJackTrip->getNumChannels() * (mJackTrip->getAudioBitResolution()/8);
+        int peer_chans = mJackTrip->getPeerNumChannels(full_redundant_packet);
+        full_packet_size = mJackTrip->getHeaderSizeInBytes()
+                           + mJackTrip->getPeerBufferSize(full_redundant_packet) * peer_chans * m_smplSize;
         /*
         cout << "peer sizes: " << mJackTrip->getHeaderSizeInBytes()
              << " + " << mJackTrip->getPeerBufferSize(full_redundant_packet)
@@ -717,16 +722,32 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     mRevivedCount += redun_last_index;
     //cout << endl;
 
+    int peer_chans = mJackTrip->getPeerNumChannels(full_redundant_packet);
+    int N = mJackTrip->getPeerBufferSize(full_redundant_packet);
+    int host_buf_size = N * m_chans * m_smplSize;
     int hdr_size = mJackTrip->getHeaderSizeInBytes();
-    int pkt_buf_size = full_packet_size - hdr_size;
-    int gap_size = (0 == last_seq_num) ? 0 : (lost - redun_last_index) * pkt_buf_size;
+    int gap_size = (0 == last_seq_num) ? 0 : (lost - redun_last_index) * host_buf_size;
 
     last_seq_num = newer_seq_num; // Save last read packet
 
+    if ((int)mBuffer.size() < host_buf_size) {
+        mBuffer.resize(host_buf_size, 0);
+    }
     // Send to audio all available audio packets, in order
     for (int i = redun_last_index; i>=0; i--) {
-        if (!mJackTrip->writeAudioBuffer(full_redundant_packet + (i*full_packet_size) + hdr_size,
-                pkt_buf_size, gap_size)) {
+        int8_t* src = full_redundant_packet + (i*full_packet_size) + hdr_size;
+        if (1 != m_chans) {
+            // Convert packet's non-interleaved layout to interleaved one used internally
+            int8_t* dst = mBuffer.data();
+            int C = qMin(m_chans, peer_chans);
+            for (int n=0; n<N; ++n) {
+                for (int c=0; c<C; ++c) {
+                    memcpy(dst + (n*m_chans + c)*m_smplSize, src + (n + c*N)*m_smplSize, m_smplSize);
+                }
+            }
+            src = dst;
+        }
+        if (!mJackTrip->writeAudioBuffer(src, host_buf_size, gap_size)) {
             emit signalError("Local and Peer buffer settings are incompatible");
             cout << "ERROR: Local and Peer buffer settings are incompatible" << endl;
             mStopped = true;
@@ -768,7 +789,19 @@ void UdpDataProtocol::sendPacketRedundancy(int8_t* full_redundant_packet,
                                            int full_packet_size)
 {
     mJackTrip->readAudioBuffer( mAudioPacket );
-    mJackTrip->putHeaderInPacket(mFullPacket, mAudioPacket);
+    int8_t* src = mAudioPacket;
+    if (1 != m_chans) {
+        // Convert internal interleaved layout to non-interleaved
+        int N = getAudioPacketSizeInBites() / m_chans / m_smplSize;
+        int8_t* dst = mBuffer.data();
+        for (int n=0; n<N; ++n) {
+            for (int c=0; c<m_chans; ++c) {
+                memcpy(dst + (n + c*N)*m_smplSize, src + (n*m_chans + c)*m_smplSize, m_smplSize);
+            }
+        }
+        src = dst;
+    }
+    mJackTrip->putHeaderInPacket(mFullPacket, src);
 
     // Move older packets to end of array of redundant packets
     std::memmove(full_redundant_packet+full_packet_size,

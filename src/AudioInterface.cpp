@@ -359,7 +359,9 @@ void AudioInterface::computeProcessFromNetwork(QVarLengthArray<sample_t*>& out_b
             for (unsigned int j = 0; j < n_frames; j++) {
                 // Change the bit resolution on each sample
                 fromBitToSampleConversion(
-                            &mOutputPacket[(i*mSizeInBytesPerChannel) + (j*mBitResolutionMode)],
+                            // use interleaved channel layout
+                            //&mOutputPacket[(i*mSizeInBytesPerChannel) + (j*mBitResolutionMode)],
+                            &mOutputPacket[(j*mBitResolutionMode*mNumOutChans) + (i*mBitResolutionMode)],
                         &tmp_sample[j], mBitResolutionMode );
             }
         }
@@ -408,7 +410,9 @@ void AudioInterface::computeProcessToNetwork(QVarLengthArray<sample_t*>& in_buff
                 tmp_result = INGAIN*tmp_sample[j] + COMBGAIN*tmp_process_sample[j];
                 fromSampleToBitConversion(
                             &tmp_result,
-                            &mInputPacket[(i*mSizeInBytesPerChannel) + (j*mBitResolutionMode)],
+                            // use interleaved channel layout
+                            //&mInputPacket[(i*mSizeInBytesPerChannel) + (j*mBitResolutionMode)],
+                            &mInputPacket[(j*mBitResolutionMode*mNumOutChans) + (i*mBitResolutionMode)],
                         mBitResolutionMode );
             }
         }
