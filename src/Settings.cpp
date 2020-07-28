@@ -160,6 +160,7 @@ void Settings::parseInput(int argc, char** argv)
     //----------------------------------------------------------------------------
     /// \todo Specify mandatory arguments
     int ch;
+    optind = 0;
     while ( (ch = getopt_long(argc, argv,
                               "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVh", longopts, NULL)) != -1 )
         switch (ch) {
