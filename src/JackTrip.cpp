@@ -90,6 +90,8 @@ JackTrip::JackTrip(jacktripModeT JacktripMode,
     mNumNetRevChans(NumNetRevChans),
     #endif // endwhere
     mBufferQueueLength(BufferQueueLength),
+    mBufferStrategy(1),
+    mMonitorQueueLength(0),
     mSampleRate(gDefaultSampleRate),
     mDeviceID(gDefaultDeviceID),
     mAudioBufferSize(gDefaultBufferSizeInSamples),
@@ -169,6 +171,9 @@ void JackTrip::setupAudio(
 #endif // endwhere
 
         mAudioInterface->setClientName(mJackClientName);
+        if (0 < mMonitorQueueLength) {
+          mAudioInterface->enableMonitorOutput();
+        }
 
         if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->setup" << std::endl;
         mAudioInterface->setup();
@@ -289,7 +294,6 @@ void JackTrip::setupRingBuffers()
     mReceiveRingBuffer = new RingBufferWavetable(mAudioInterface->getSizeInBytesPerChannel() * mNumChans,
              mBufferQueueLength);
              */
-
         break;
     case ZEROS:
         mSendRingBuffer = new RingBuffer(slot_size,
@@ -303,7 +307,8 @@ void JackTrip::setupRingBuffers()
             cout << "Using JitterBuffer strategy " << mBufferStrategy
                  << ", total_size=" << total_size << endl;
             mReceiveRingBuffer = new JitterBuffer(slot_size, mBufferQueueLength*slot_size,
-                                                                total_size, mBufferStrategy);
+                                        total_size, mBufferStrategy,
+                                        mMonitorQueueLength*slot_size, mNumChans, mAudioBitResolution);
         }
         /*
     mSendRingBuffer = new RingBuffer(mAudioInterface->getSizeInBytesPerChannel() * mNumChans,
@@ -508,6 +513,8 @@ void JackTrip::onStatTimer()
       << "/" << recv_io_stat.buf_dec_pktloss
       << " skew: " << recv_io_stat.skew
       << "/" << recv_io_stat.skew_raw
+      << " monitor: " << recv_io_stat.monitor_skew
+      << "/" << recv_io_stat.monitor_delta
       << endl;
 }
 

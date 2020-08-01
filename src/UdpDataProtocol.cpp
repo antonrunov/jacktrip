@@ -439,7 +439,9 @@ void UdpDataProtocol::run()
     //std::cout << "Experimental version -- not using setRealtimeProcessPriority()" << std::endl;
     // Anton Runov: uncommenting setRealtimeProcessPriority below, but using much lower priority value
     // on Linux. Other platforms might require more changes.
+#if defined (__LINUX__)
     setRealtimeProcessPriority();
+#endif
 
     /////////////////////
     // to see thread priorities

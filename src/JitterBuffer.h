@@ -43,18 +43,26 @@
 class JitterBuffer : public RingBuffer
 {
 public:
-    JitterBuffer(int slot_size, int max_latency, int total_size, int strategy);
+    JitterBuffer(int slot_size, int max_latency, int total_size, int strategy,
+                                int monitor_latency, int channels, int bit_res);
     virtual ~JitterBuffer() {}
 
     virtual bool insertSlotNonBlocking(const int8_t* ptrToSlot, int len, int lostLen);
     virtual void readSlotNonBlocking(int8_t* ptrToReadSlot);
+    virtual void readMonitorSlot(int8_t* ptrToReadSlot);
 
 protected:
     void processPacketLoss(int lostLen);
 
 protected:
     int mMaxLatency;
+    int mNumChannels;
+    int mAudioBitRes;
+    int mMinStepSize;
     bool mActive;
+    uint32_t mMonitorLatency;
+    uint32_t mMonitorPosition;
+    double  mMonitorPositionCorr;
 
     double mUnderrunIncTolerance;
     double mCorrIncTolerance;

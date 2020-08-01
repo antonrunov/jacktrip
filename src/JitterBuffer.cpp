@@ -48,12 +48,17 @@ using std::cout; using std::endl;
 
 
 //*******************************************************************************
-JitterBuffer::JitterBuffer(int slot_size, int max_latency, int total_size, int strategy) :
+JitterBuffer::JitterBuffer(int slot_size, int max_latency, int total_size, int strategy,
+                                          int monitor_latency, int channels, int bit_res) :
     RingBuffer(0, 0)
 {
     mSlotSize = slot_size;
     mMaxLatency = max_latency;
     mTotalSize = total_size;
+    mMonitorLatency = monitor_latency;
+    mNumChannels = channels;
+    mAudioBitRes = bit_res;
+    mMinStepSize = channels * bit_res;
     mActive = false;
 
     // Defaults for zero strategy
@@ -66,6 +71,7 @@ JitterBuffer::JitterBuffer(int slot_size, int max_latency, int total_size, int s
     mOverflowDropStep = mMaxLatency / 2;
     mLevelCur = mMaxLatency;
     mLevel = mLevelCur;
+    mMonitorPosition = mReadPosition - mMonitorLatency;
 
     switch (strategy) {
       case 1:
@@ -179,6 +185,71 @@ void JitterBuffer::readSlotNonBlocking(int8_t* ptrToReadSlot)
     }
     mReadPosition += len;
 }
+
+//*******************************************************************************
+void JitterBuffer::readMonitorSlot(int8_t* ptrToReadSlot)
+{
+    int len = mSlotSize;
+    QMutexLocker locker(&mMutex);
+    if (0 == mReadPosition) {
+        std::memset(ptrToReadSlot, 0, len);
+        return;
+    }
+    // latency correction
+    int32_t d = mReadPosition - mMonitorLatency - mMonitorPosition - len;
+    if (qAbs(d) > 2*mSlotSize) {
+        mMonitorPosition = mReadPosition - mMonitorLatency - len;
+        mMonitorPositionCorr = 0.0;
+    }
+    else {
+        mMonitorPositionCorr += 0.0003 * d;
+        int delta = mMonitorPositionCorr / mMinStepSize;
+        if (0 != delta) {
+            mMonitorPositionCorr -= delta * mMinStepSize;
+            if (2 == mAudioBitRes) {
+                // interpolate
+                len += delta * mMinStepSize;
+            }
+            else {
+                // skip
+                mMonitorPosition += delta * mMinStepSize;
+            }
+            mMonitorSkew += delta;
+        }
+    }
+    mMonitorDelta = d / mMinStepSize;
+    int32_t available = mWritePosition - mMonitorPosition;
+    int read_len = qBound(0, available, len);
+    if (len == mSlotSize) {
+        int rpos = mMonitorPosition % mTotalSize;
+        int n = qMin(mTotalSize - rpos, read_len);
+        std::memcpy(ptrToReadSlot, mRingBuffer+rpos, n);
+        if (n < read_len) {
+            //cout << "split read: " << read_len << "-" << n << endl;
+            std::memcpy(ptrToReadSlot+n, mRingBuffer, read_len-n);
+        }
+        if (read_len < len) {
+            std::memset(ptrToReadSlot+read_len, 0, len-read_len);
+        }
+    }
+    else {
+        // interpolation len => mSlotSize
+        double K = 1.0 * len / mSlotSize;
+        for (int c=0; c < mMinStepSize; c+=sizeof(int16_t)) {
+            for (int j=0; j < mSlotSize/mMinStepSize; ++j) {
+                int j1 = std::floor(j*K);
+                double a = j*K - j1;
+                int rpos = (mMonitorPosition + j1*mMinStepSize + c) % mTotalSize;
+                int16_t v1 = *(int16_t*)(mRingBuffer + rpos);
+                rpos = (rpos + mMinStepSize) % mTotalSize;
+                int16_t v2 = *(int16_t*)(mRingBuffer + rpos);
+                *(int16_t*)(ptrToReadSlot + j*mMinStepSize + c) = std::round((1-a)*v1 + a*v2);
+            }
+        }
+    }
+    mMonitorPosition += len;
+}
+
 
 //*******************************************************************************
 void JitterBuffer::processPacketLoss(int lostLen)

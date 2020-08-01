@@ -209,6 +209,7 @@ void JackTripWorker::run()
         jacktrip.setBufferStrategy(settings->getBufferStrategy());
         jacktrip.setNetIssuesSimulation(settings->getSimulatedLossRate(),
             settings->getSimulatedJitterRate(), settings->getSimulatedDelayRel());
+        jacktrip.setMonitor(settings->getMonitorQueue());
 
         if (gVerboseFlag) cout << "---> JackTripWorker: setJackTripFromClientHeader..." << endl;
         int PeerConnectionMode = setJackTripFromClientHeader(jacktrip);

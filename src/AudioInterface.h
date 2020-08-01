@@ -115,6 +115,8 @@ public:
     * \param in_buffer Array of output audio samplers for each channel. The user
     * is reponsible to check that each channel has n_frames samplers
     */
+    virtual void monitorCallback(QVarLengthArray<sample_t*>& mon_buffer,
+                          unsigned int n_frames);
     virtual void callback(QVarLengthArray<sample_t*>& in_buffer,
                           QVarLengthArray<sample_t*>& out_buffer,
                           unsigned int n_frames);
@@ -160,6 +162,7 @@ public:
     { mBufferSizeInSamples = buf_size; }
     /// \brief Set Client Name to something different that the default (JackTrip)
     virtual void setClientName(const char* ClientName) = 0;
+    virtual void enableMonitorOutput() {}
     //------------------------------------------------------------------
 
     //--------------GETTERS---------------------------------------------

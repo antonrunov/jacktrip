@@ -320,6 +320,8 @@ public:
     void parseAudioPacket(int8_t* full_packet, int8_t* audio_packet);
     virtual void sendNetworkPacket(const int8_t* ptrToSlot)
     { mSendRingBuffer->insertSlotNonBlocking(ptrToSlot, 0, 0); }
+    virtual void receiveMonitorPacket(int8_t* ptrToReadSlot)
+    { mReceiveRingBuffer->readMonitorSlot(ptrToReadSlot); }
     virtual void receiveNetworkPacket(int8_t* ptrToReadSlot)
     { mReceiveRingBuffer->readSlotNonBlocking(ptrToReadSlot); }
     virtual void readAudioBuffer(int8_t* ptrToReadSlot)
@@ -402,6 +404,7 @@ public:
         mSimulatedJitterRate = jitter;
         mSimulatedDelayRel = delay_rel;
     }
+    void setMonitor(int monitor_queue) {mMonitorQueueLength = monitor_queue;}
 
 public slots:
     /// \brief Slot to stop all the processes and threads
@@ -484,6 +487,7 @@ private:
 #endif // endwhere
     int mBufferQueueLength; ///< Audio Buffer from network queue length
     int mBufferStrategy;
+    int mMonitorQueueLength;
     uint32_t mSampleRate; ///< Sample Rate
     uint32_t mDeviceID; ///< RTAudio DeviceID
     uint32_t mAudioBufferSize; ///< Audio buffer size to process on each callback

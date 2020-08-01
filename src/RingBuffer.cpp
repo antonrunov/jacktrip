@@ -102,6 +102,8 @@ RingBuffer::RingBuffer(int SlotSize, int NumSlots) :
     mBufDecPktLoss = 0;
     mBufIncUnderrun = 0;
     mBufIncCompensate = 0;
+    mMonitorSkew = 0;
+    mMonitorDelta = 0;
 }
 
 
@@ -237,6 +239,14 @@ void RingBuffer::readSlotNonBlocking(int8_t* ptrToReadSlot)
 
 
 //*******************************************************************************
+// Not supported in RingBuffer
+void RingBuffer::readMonitorSlot(int8_t* ptrToReadSlot)
+{
+    std::memset(ptrToReadSlot, 0, mSlotSize);
+}
+
+
+//*******************************************************************************
 void RingBuffer::setUnderrunReadSlot(int8_t* ptrToReadSlot)
 {
     std::memset(ptrToReadSlot, 0, mSlotSize);
@@ -303,6 +313,7 @@ bool RingBuffer::getStats(RingBuffer::IOStat* stat, bool reset)
         mBufDecPktLoss = 0;
         mBufIncUnderrun = 0;
         mBufIncCompensate = 0;
+        mMonitorSkew = 0;
     }
     stat->underruns = mUnderruns / mStatUnit;
     stat->overflows = mOverflows / mStatUnit;
@@ -315,6 +326,8 @@ bool RingBuffer::getStats(RingBuffer::IOStat* stat, bool reset)
     stat->buf_dec_pktloss = mBufDecPktLoss / mStatUnit;
     stat->buf_inc_underrun = mBufIncUnderrun / mStatUnit;
     stat->buf_inc_compensate = mBufIncCompensate / mStatUnit;
+    stat->monitor_skew = mMonitorSkew;
+    stat->monitor_delta = mMonitorDelta;
     return true;
 }
 

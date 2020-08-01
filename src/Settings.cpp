@@ -70,7 +70,7 @@ Settings::Settings() :
     mBindPortNum(gDefaultPort), mPeerPortNum(gDefaultPort),
     mClientName(NULL),
     mUnderrrunZero(false),
-    mBufferStrategy(-1),
+    mBufferStrategy(1),
     mLoopBack(false),
     #ifdef WAIR // WAIR
     mNumNetRevChans(0),
@@ -90,7 +90,8 @@ Settings::Settings() :
     mIOStatTimeout(0),
     mSimulatedLossRate(0.0),
     mSimulatedJitterRate(0.0),
-    mSimulatedDelayRel(0.0)
+    mSimulatedDelayRel(0.0),
+    mMonitorQueue(0)
 {}
 
 //*******************************************************************************
@@ -152,6 +153,7 @@ void Settings::parseInput(int argc, char** argv)
     { "bufstrategy", required_argument, NULL, 1001 }, // Set IO stat log file
     { "simloss", required_argument, NULL, 1002 },
     { "simjitter", required_argument, NULL, 1003 },
+    { "monitor", required_argument, NULL, 'm' },
     { "help", no_argument, NULL, 'h' }, // Print Help
     { NULL, 0, NULL, 0 }
 };
@@ -161,7 +163,7 @@ void Settings::parseInput(int argc, char** argv)
     /// \todo Specify mandatory arguments
     int ch;
     while ( (ch = getopt_long(argc, argv,
-                              "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVh", longopts, NULL)) != -1 )
+                              "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVm:h", longopts, NULL)) != -1 )
         switch (ch) {
 
         case 'n': // Number of input and output channels
@@ -368,6 +370,9 @@ void Settings::parseInput(int argc, char** argv)
                 mSimulatedDelayRel = atof(endp+1);
             }
             break;
+        case 'm': // Monitor output
+            mMonitorQueue = atoi(optarg);
+            break;
         case 'h':
             //-------------------------------------------------------
             printUsage();
@@ -440,6 +445,7 @@ void Settings::printUsage()
     cout << " --localaddress                           Change default local host IP address (default: 127.0.0.1)" << endl;
     cout << " --nojackportsconnect                     Don't connect default audio ports in jack" << endl;
     cout << " --bufstrategy     # (0, 1, 2)            Use alternative jitter buffer" << endl;
+    cout << " -m, --monitor <monitor_queue>            Turn on monitor output ports with extra queue (requires new jitter buffer)" << endl;
     cout << endl;
     cout << "ARGUMENTS TO USE JACKTRIP WITHOUT JACK:" << endl;
     cout << " --rtaudio                                Use system's default sound system instead of Jack" << endl;
@@ -588,6 +594,7 @@ void Settings::startJackTrip()
         mJackTrip->setBufferStrategy(getBufferStrategy());
         mJackTrip->setNetIssuesSimulation(getSimulatedLossRate(),
             getSimulatedJitterRate(), getSimulatedDelayRel());
+        mJackTrip->setMonitor(getMonitorQueue());
 
         // Add Plugins
         if ( mLoopBack ) {

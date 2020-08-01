@@ -338,6 +338,28 @@ void AudioInterface::callback(QVarLengthArray<sample_t*>& in_buffer,
 }
 
 
+void AudioInterface::monitorCallback(QVarLengthArray<sample_t*>& mon_buffer,
+                                               unsigned int n_frames)
+{
+    /// \todo cast *mInBuffer[i] to the bit resolution
+    // Output Process (from NETWORK to JACK)
+    // ----------------------------------------------------------------
+    // Read Audio buffer from RingBuffer (read from incoming packets)
+    mJackTrip->receiveMonitorPacket(mOutputPacket);
+        // Extract separate channels to send to Jack
+        for (int i = 0; i < mNumOutChans; i++) {
+            sample_t* tmp_sample = mon_buffer[i]; //sample buffer for channel i
+            for (unsigned int j = 0; j < n_frames; j++) {
+                // Change the bit resolution on each sample
+                fromBitToSampleConversion(
+                            // use interleaved channel layout
+                            //&mOutputPacket[(i*mSizeInBytesPerChannel) + (j*mBitResolutionMode)],
+                            &mOutputPacket[(j*mBitResolutionMode*mNumOutChans) + (i*mBitResolutionMode)],
+                        &tmp_sample[j], mBitResolutionMode );
+            }
+        }
+}
+
 //*******************************************************************************
 // Before sending and reading to Jack, we have to round to the sample resolution
 // that the program is using. Jack uses 32 bits (gJackBitResolution in globals.h)

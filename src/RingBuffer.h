@@ -99,6 +99,7 @@ public:
    * \param ptrToReadSlot Pointer to read slot from the RingBuffer
    */
     virtual void readSlotNonBlocking(int8_t* ptrToReadSlot);
+    virtual void readMonitorSlot(int8_t* ptrToReadSlot);
 
     struct IOStat {
         uint32_t underruns;
@@ -110,6 +111,8 @@ public:
         uint32_t buf_dec_pktloss;
         uint32_t buf_inc_underrun;
         uint32_t buf_inc_compensate;
+        int32_t monitor_skew;
+        int32_t monitor_delta;
     };
     virtual bool getStats(IOStat* stat, bool reset);
 
@@ -169,6 +172,10 @@ protected:
     uint32_t mReadsNew;
     uint32_t mUnderrunsNew;
     int32_t  mSkew0;
+
+    // monitor counters
+    int32_t mMonitorSkew;
+    int32_t mMonitorDelta;
 };
 
 #endif
