@@ -197,9 +197,10 @@ void JitterBuffer::readMonitorSlot(int8_t* ptrToReadSlot)
     }
     // latency correction
     int32_t d = mReadPosition - mMonitorLatency - mMonitorPosition - len;
-    if (qAbs(d) > 2*mSlotSize) {
+    if (qAbs(d) > mMonitorLatency / 2) {
         mMonitorPosition = mReadPosition - mMonitorLatency - len;
         mMonitorPositionCorr = 0.0;
+        mMonitorSkew += d / mMinStepSize;
     }
     else {
         mMonitorPositionCorr += 0.0003 * d;
