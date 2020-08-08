@@ -58,4 +58,7 @@ set(jacktrip_HEADERS_MOC
 QT5_WRAP_CPP(jacktrip_MOC ${jacktrip_HEADERS_MOC})
 add_executable(jacktripui ${GUI_TYPE} ${jacktrip_SRC} ${jacktrip_ui_SRC} ${jacktrip_MOC})
 target_link_libraries(jacktripui Qt5::Core Qt5::Widgets Qt5::Gui Qt5::Network ${LIBJACK})
+set_target_properties(jacktripui PROPERTIES
+                        MACOSX_BUNDLE ON
+                        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/MacInfo.plist.in)
 

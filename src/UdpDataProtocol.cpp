@@ -89,6 +89,8 @@ UdpDataProtocol::UdpDataProtocol(JackTrip* jacktrip, const runModeT runmode,
     mSimulatedLossRate = 0.0;
     mSimulatedJitterRate = 0.0;
     mSimulatedJitterMaxDelay = 0.0;
+
+    mNoDataReported = false;
 }
 
 
@@ -513,6 +515,7 @@ void UdpDataProtocol::run()
         // from that packet
         if (gVerboseFlag) std::cout << "    UdpDataProtocol:run" << mRunMode << " before !UdpSocket.hasPendingDatagrams()" << std::endl;
         std::cout << "Waiting for Peer..." << std::endl;
+        emit statusChanged(1, "Waiting for Peer...");
         // This blocks waiting for the first packet
         while ( !UdpSocket.hasPendingDatagrams() ) {
             if (mStopped) { return; }
@@ -540,6 +543,7 @@ void UdpDataProtocol::run()
         if (gVerboseFlag) std::cout << "    UdpDataProtocol:run" << mRunMode << " before mJackTrip->parseAudioPacket()" << std::endl;
         std::cout << "Received Connection from Peer!" << std::endl;
         emit signalReceivedConnectionFromPeer();
+        emit statusChanged(2, "Connected");
 
         // Redundancy Variables
         // --------------------
@@ -637,6 +641,8 @@ void UdpDataProtocol::waitForReady(QUdpSocket& UdpSocket, int timeout_msec)
 
         if ( !(elapsed_time_usec % emit_resolution_usec) ) {
             emit signalWaitingTooLong(static_cast<int>(elapsed_time_usec/1000));
+            emit statusChanged(3, "No Data from Peer...");
+            mNoDataReported = true;
         }
     }
     // cc under what condition?
@@ -671,6 +677,11 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     // This is blocking until we get a packet...
     receivePacket( UdpSocket, reinterpret_cast<char*>(full_redundant_packet),
                    full_redundant_packet_size);
+
+    if (mNoDataReported) {
+        mNoDataReported = false;
+        emit statusChanged(2, "Connected");
+    }
 
     if (0.0 < mSimulatedLossRate || 0.0 < mSimulatedJitterRate) {
         double x = QRandomGenerator::global()->generateDouble();

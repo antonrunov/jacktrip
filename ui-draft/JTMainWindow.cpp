@@ -172,16 +172,25 @@ JTMainWindow::JTMainWindow()
   top_layout->addWidget(lbl_command);
   QHBoxLayout* btn_layout = new QHBoxLayout();
 
-  QPushButton* btn_start = new QPushButton("Start");
-  connect(btn_start, &QPushButton::clicked, this, &JTMainWindow::start);
-  btn_layout->addWidget(btn_start);
+  m_btnStart = new QPushButton("Start");
+  connect(m_btnStart, &QPushButton::clicked, this, &JTMainWindow::start);
+  btn_layout->addWidget(m_btnStart);
 
-  QPushButton* btn_stop = new QPushButton("Stop");
-  connect(btn_stop, &QPushButton::clicked, this, &JTMainWindow::stop);
-  //btn_stop->setEnabled(false);
-  btn_layout->addWidget(btn_stop);
+  m_btnStop = new QPushButton("Stop");
+  connect(m_btnStop, &QPushButton::clicked, this, &JTMainWindow::stop);
+  m_btnStop->setEnabled(false);
+  btn_layout->addWidget(m_btnStop);
 
   top_layout->addLayout(btn_layout);
+
+  QLabel* lbl_status = new QLabel("--- Status ---");
+  lbl_status->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+  top_layout->addWidget(lbl_status);
+
+  m_status = new QLabel("Stopped");
+  QFontMetrics fm(m_status->font() );
+  m_status->setMinimumHeight(fm.lineSpacing()*3);
+  top_layout->addWidget(m_status);
 
   QSize sz = conf.value(WINDOW_SIZE, QSize(0,0)).toSize();
   if (!sz.isNull()) {
@@ -270,7 +279,11 @@ void JTMainWindow::start()
     m_settings = NULL;
     return;
   }
+  m_btnStart->setEnabled(false);
+  m_btnStop->setEnabled(true);
+  m_status->setText("Starting");
   connect(m_settings, &QThread::finished, this, &JTMainWindow::stop);
+  connect(m_settings, &Settings::statusChanged, this, &JTMainWindow::updateStatus);
   m_settings->start();
 }
 
@@ -287,6 +300,17 @@ void JTMainWindow::stop()
   m_settings->wait();
   delete m_settings;
   m_settings = NULL;
+
+  m_btnStart->setEnabled(true);
+  m_btnStop->setEnabled(false);
+  m_status->setText("Stopped");
+}
+
+// ----------------------------------------------------------------------------
+
+void JTMainWindow::updateStatus(int status, const QString& msg)
+{
+  m_status->setText(msg);
 }
 
 // ----------------------------------------------------------------------------

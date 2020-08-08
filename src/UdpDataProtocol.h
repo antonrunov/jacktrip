@@ -226,6 +226,7 @@ private:
     std::atomic<uint32_t>  mOutOfOrderCount;
     std::atomic<uint32_t>  mRevivedCount;
     uint32_t  mStatCount;
+    bool mNoDataReported;
 
     double mSimulatedLossRate;
     double mSimulatedJitterRate;

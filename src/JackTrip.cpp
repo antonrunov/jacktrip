@@ -424,6 +424,12 @@ void JackTrip::startProcess(
         break;
     }
 
+    if (mStopped) {
+      return;
+    }
+    QObject::connect(mDataProtocolReceiver, SIGNAL(statusChanged(int,const QString&)),
+                     this, SIGNAL(statusChanged(int,const QString&)), Qt::QueuedConnection);
+
     // Have the threads share a single socket that operates at full duplex.
 #if defined (__WIN_32__)
     SOCKET sock_fd = INVALID_SOCKET;
@@ -600,6 +606,7 @@ int JackTrip::serverStart(bool timeout, int udpTimeout) // udpTimeout unused
     } else {
         if (gVerboseFlag) std::cout << "JackTrip:serverStart before !UdpSockTemp.hasPendingDatagrams()" << std::endl;
         cout << "Waiting for Connection From a Client..." << endl;
+        emit statusChanged(0, "Waiting for Connection From a Client...");
         while ( !UdpSockTemp.hasPendingDatagrams() ) {
             if (mStopped == true) { emit signalUdpTimeOut(); return -1; }
             if (gVerboseFlag) std::cout << sleepTime << "ms  " << std::flush;

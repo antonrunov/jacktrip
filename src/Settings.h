@@ -89,6 +89,9 @@ public slots:
         exit();
     }
 
+signals:
+    void statusChanged(int status, const QString& msg);
+
 protected:
     virtual void run() {
         try
@@ -103,6 +106,10 @@ protected:
             std::cerr << gPrintSeparator << std::endl;
         }
         exec();
+        if (NULL != mJackTrip) {
+            delete mJackTrip;
+            mJackTrip = NULL;
+        }
     }
 
 private:

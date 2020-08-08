@@ -97,7 +97,10 @@ Settings::Settings() :
 Settings::~Settings()
 {
     stopJackTrip();
-    delete mJackTrip;
+    if (NULL != mJackTrip) {
+        delete mJackTrip;
+        mJackTrip = NULL;
+    }
 }
 
 //*******************************************************************************
@@ -522,6 +525,8 @@ void Settings::startJackTrip()
         // Connect Signals and Slots
         QObject::connect(mJackTrip, SIGNAL( signalProcessesStopped() ),
                          this, SLOT( slotExitProgram() ));
+        QObject::connect(mJackTrip, SIGNAL(statusChanged(int,const QString&)),
+                     this, SIGNAL(statusChanged(int,const QString&)), Qt::QueuedConnection);
 
         // Change client name if different from default
         if (mClientName != NULL) {
@@ -658,5 +663,7 @@ void Settings::startJackTrip()
 //*******************************************************************************
 void Settings::stopJackTrip()
 {
-    mJackTrip->stop();
+    if (NULL != mJackTrip) {
+        mJackTrip->slotStopProcesses();
+    }
 }

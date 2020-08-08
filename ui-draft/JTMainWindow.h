@@ -1,6 +1,8 @@
 #include <QWidget>
 
 class Settings;
+class QPushButton;
+class QLabel;
 
 class JTMainWindow : public QWidget
 {
@@ -10,9 +12,13 @@ class JTMainWindow : public QWidget
   protected:
     void start();
     void stop();
+    void updateStatus(int status, const QString& msg);
 
   protected:
     Settings* m_settings;
+    QPushButton* m_btnStart;
+    QPushButton* m_btnStop;
+    QLabel*      m_status;
 
   protected:
     void resizeEvent(QResizeEvent *event);
