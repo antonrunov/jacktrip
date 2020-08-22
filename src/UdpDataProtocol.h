@@ -45,6 +45,7 @@
 #include <QHostAddress>
 #include <QMutex>
 #include <vector>
+#include <random>
 
 #include "DataProtocol.h"
 #include "jacktrip_types.h"
@@ -227,9 +228,12 @@ private:
     std::atomic<uint32_t>  mRevivedCount;
     uint32_t  mStatCount;
 
+    // packet loss/jitter simulation
     double mSimulatedLossRate;
     double mSimulatedJitterRate;
     double mSimulatedJitterMaxDelay;
+    std::default_random_engine mRndEngine;
+    std::uniform_real_distribution<double> mUniformDist;
 };
 
 #endif // __UDPDATAPROTOCOL_H__

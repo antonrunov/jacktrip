@@ -40,7 +40,6 @@
 #include "JackTrip.h"
 
 #include <QHostInfo>
-#include <QRandomGenerator>
 
 #include <cstring>
 #include <iostream>
@@ -675,7 +674,7 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
                    full_redundant_packet_size);
 
     if (0.0 < mSimulatedLossRate || 0.0 < mSimulatedJitterRate) {
-        double x = QRandomGenerator::global()->generateDouble();
+        double x = mUniformDist(mRndEngine);
         // Drop packets
         x -= mSimulatedLossRate;
         if (0 > x) {
@@ -684,7 +683,7 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
         // Delay packets
         x -= mSimulatedJitterRate;
         if (0 > x) {
-            usleep(QRandomGenerator::global()->bounded(mSimulatedJitterMaxDelay*1e6));
+            usleep(mUniformDist(mRndEngine) * mSimulatedJitterMaxDelay * 1e6);
         }
     }
 
@@ -781,6 +780,11 @@ void UdpDataProtocol::setIssueSimulation(double loss, double jitter, double max_
     mSimulatedLossRate = loss;
     mSimulatedJitterRate = jitter;
     mSimulatedJitterMaxDelay = max_delay;
+
+    std::random_device r;
+    mRndEngine = std::default_random_engine(r());
+    mUniformDist = std::uniform_real_distribution<double>(0.0, 1.0);
+
     cout << "Simulating network issues: "
       "loss_rate=" << loss << ", jitter_rate=" << jitter << ", jitter_max_delay=" << max_delay << endl;
 }
