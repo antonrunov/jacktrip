@@ -60,7 +60,7 @@
 
 // Enables time-contraint policy and priority suitable for low-latency,
 // glitch-resistant audio.
-void setRealtimeProcessPriority() {
+void setRealtimeProcessPriority_v1_2() {
     // Increase thread priority to real-time.
 
     // Please note that the thread_policy_set() calls may fail in
@@ -138,6 +138,43 @@ void setRealtimeProcessPriority() {
         std::cerr << "Failed to set thread realtime constraints. " << result << std::endl;
 
     return;
+}
+
+//*******************************************************************************
+//http://developer.apple.com/DOCUMENTATION/Darwin/Conceptual/KernelProgramming/scheduler/chapter_8_section_4.html
+//http://lists.apple.com/archives/darwin-dev/2007/Sep/msg00035.html
+static int set_realtime(int period, int computation, int constraint)
+{
+  //AbsoluteTime time;
+  //clock_get_uptime((uint64_t *)&time);
+
+  //uint64_t result;
+  //clock_get_uptime(&result);
+  //clock_get_system_microtime(&result,&result);
+
+  struct thread_time_constraint_policy ttcpolicy;
+  int ret;
+  
+  ttcpolicy.period=period; // HZ/160
+  ttcpolicy.computation=computation; // HZ/3300;
+  ttcpolicy.constraint=constraint; // HZ/2200;
+  ttcpolicy.preemptible=1;
+  
+  if ((ret=thread_policy_set(mach_thread_self(),
+			     THREAD_TIME_CONSTRAINT_POLICY, (thread_policy_t)&ttcpolicy,
+			     THREAD_TIME_CONSTRAINT_POLICY_COUNT)) != KERN_SUCCESS) {
+    fprintf(stderr, "set_realtime() failed.\n");
+    return 0;
+  }
+  return 1;
+}
+
+void setRealtimeProcessPriority_v1_1() {
+  set_realtime(1250000,60000,90000);
+}
+
+void setRealtimeProcessPriority() {
+  setRealtimeProcessPriority_v1_1();
 }
 
 #endif //__MAC_OSX__
