@@ -56,7 +56,7 @@ JTMainWindow::JTMainWindow()
   cmb_srate->addItem("48000");
   cmb_srate->addItem("96000");
   cmb_srate->setCurrentText(checkConfValue(conf, SAMPLE_RATE, 48000).toString());
-  connect(cmb_srate->lineEdit(), &QLineEdit::editingFinished,
+  connect(cmb_srate->lineEdit(), &QLineEdit::textChanged,
                       this, [=] () {setIntOption(SAMPLE_RATE, cmb_srate->currentText().toUInt());});
   conf_layout->addWidget(new QLabel("Sample Rate"), row, 0);
   conf_layout->addWidget(cmb_srate, row, 1);
@@ -113,7 +113,7 @@ JTMainWindow::JTMainWindow()
   // Remote Address
   QLineEdit* rem_address = new QLineEdit();
   rem_address->setText(checkConfValue(conf, REMOTE_ADDRESS, "").toString());
-  connect(rem_address, &QLineEdit::editingFinished,
+  connect(rem_address, &QLineEdit::textChanged,
                       this, [=] () {setStringOption(REMOTE_ADDRESS, rem_address->text());});
   conf_layout->addWidget(new QLabel("Remote Address"), row, 0);
   conf_layout->addWidget(rem_address, row, 1);
@@ -136,7 +136,7 @@ JTMainWindow::JTMainWindow()
   // Extra Options for Jacktrip
   QLineEdit* extopt_jacktrip = new QLineEdit();
   extopt_jacktrip->setText(checkConfValue(conf, EXTRA_OPTS, "").toString());
-  connect(extopt_jacktrip, &QLineEdit::editingFinished,
+  connect(extopt_jacktrip, &QLineEdit::textChanged,
                       this, [=] () {setStringOption(EXTRA_OPTS, extopt_jacktrip->text());});
   conf_layout->addWidget(new QLabel("Jacktrip Options"), row, 0);
   conf_layout->addWidget(extopt_jacktrip, row, 1);
@@ -145,7 +145,7 @@ JTMainWindow::JTMainWindow()
   // Extra Options for Jackd
   QLineEdit* extopt_jackd = new QLineEdit();
   extopt_jackd->setText(checkConfValue(conf, EXTRA_OPTS_JACKD, "").toString());
-  connect(extopt_jackd, &QLineEdit::editingFinished,
+  connect(extopt_jackd, &QLineEdit::textChanged,
                       this, [=] () {setStringOption(EXTRA_OPTS_JACKD, extopt_jackd->text());});
   conf_layout->addWidget(new QLabel("Jackd Options"), row, 0);
   conf_layout->addWidget(extopt_jackd, row, 1);
@@ -154,7 +154,7 @@ JTMainWindow::JTMainWindow()
   // Extra Options for Backend
   QLineEdit* extopt_backend = new QLineEdit();
   extopt_backend->setText(checkConfValue(conf, EXTRA_OPTS_BACKEND, "").toString());
-  connect(extopt_backend, &QLineEdit::editingFinished,
+  connect(extopt_backend, &QLineEdit::textChanged,
                       this, [=] () {setStringOption(EXTRA_OPTS_BACKEND, extopt_backend->text());});
   conf_layout->addWidget(new QLabel("Backend Options"), row, 0);
   conf_layout->addWidget(extopt_backend, row, 1);
