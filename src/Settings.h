@@ -79,7 +79,7 @@ public:
     double getSimulatedLossRate() const {return  mSimulatedLossRate;}
     double getSimulatedJitterRate() const {return mSimulatedJitterRate;}
     double getSimulatedDelayRel() const {return mSimulatedDelayRel;}
-    int getMonitorQueue() const {return mMonitorQueue;}
+    int getBroadcastQueue() const {return mBroadcastQueue;}
 
 
 public slots:
@@ -130,7 +130,7 @@ private:
     double mSimulatedLossRate;
     double mSimulatedJitterRate;
     double mSimulatedDelayRel;
-    int mMonitorQueue;
+    int mBroadcastQueue;
 };
 
 #endif

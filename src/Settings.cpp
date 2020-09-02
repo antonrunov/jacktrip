@@ -58,6 +58,12 @@ using std::cout; using std::endl;
 
 int gVerboseFlag = 0;
 
+enum JTLongOptIDS {
+  OPT_BUFSTRATEGY = 1001,
+  OPT_SIMLOSS,
+  OPT_SIMJITTER,
+  OPT_BROADCAST,
+};
 
 //*******************************************************************************
 Settings::Settings() :
@@ -91,7 +97,7 @@ Settings::Settings() :
     mSimulatedLossRate(0.0),
     mSimulatedJitterRate(0.0),
     mSimulatedDelayRel(0.0),
-    mMonitorQueue(0)
+    mBroadcastQueue(0)
 {}
 
 //*******************************************************************************
@@ -150,10 +156,10 @@ void Settings::parseInput(int argc, char** argv)
     { "hubpatch", required_argument, NULL, 'p' }, // Set hubConnectionMode for auto patch in Jack
     { "iostat", required_argument, NULL, 'I' }, // Set IO stat timeout
     { "iostatlog", required_argument, NULL, 'G' }, // Set IO stat log file
-    { "bufstrategy", required_argument, NULL, 1001 }, // Set IO stat log file
-    { "simloss", required_argument, NULL, 1002 },
-    { "simjitter", required_argument, NULL, 1003 },
-    { "monitor", required_argument, NULL, 'm' },
+    { "bufstrategy", required_argument, NULL, OPT_BUFSTRATEGY }, // Set bufstrategy
+    { "simloss", required_argument, NULL, OPT_SIMLOSS },
+    { "simjitter", required_argument, NULL, OPT_SIMJITTER },
+    { "broadcast", required_argument, NULL, OPT_BROADCAST },
     { "help", no_argument, NULL, 'h' }, // Print Help
     { NULL, 0, NULL, 0 }
 };
@@ -163,7 +169,7 @@ void Settings::parseInput(int argc, char** argv)
     /// \todo Specify mandatory arguments
     int ch;
     while ( (ch = getopt_long(argc, argv,
-                              "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVm:h", longopts, NULL)) != -1 )
+                              "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVh", longopts, NULL)) != -1 )
         switch (ch) {
 
         case 'n': // Number of input and output channels
@@ -238,7 +244,13 @@ void Settings::parseInput(int argc, char** argv)
             break;
         case 'q':
             //-------------------------------------------------------
-            if ( atoi(optarg) <= 0 ) {
+            if (0 == strncmp(optarg, "auto", 4)) {
+              mBufferQueueLength = -atoi(optarg+4);
+              if (0 == mBufferQueueLength) {
+                mBufferQueueLength = -500;
+              }
+            }
+            else if ( atoi(optarg) <= 0 ) {
                 std::cerr << "--queue ERROR: The queue has to be equal or greater than 2" << endl;
                 printUsage();
                 std::exit(1); }
@@ -349,7 +361,7 @@ void Settings::parseInput(int argc, char** argv)
                 std::exit(1);
             }
             break;
-        case 1001: // Buf strategy
+        case OPT_BUFSTRATEGY: // Buf strategy
             mBufferStrategy = atoi(optarg);
             if (-1 > mBufferStrategy || 2 < mBufferStrategy) {
                 std::cerr << "Unsupported buffer strategy " << optarg << endl;
@@ -357,10 +369,10 @@ void Settings::parseInput(int argc, char** argv)
                 std::exit(1);
             }
             break;
-        case 1002: // Simulate packet loss
+        case OPT_SIMLOSS: // Simulate packet loss
             mSimulatedLossRate = atof(optarg);
             break;
-        case 1003: // Simulate jitter
+        case OPT_SIMJITTER: // Simulate jitter
             char* endp;
             mSimulatedJitterRate = strtod(optarg, &endp);
             if (0 == *endp) {
@@ -370,8 +382,8 @@ void Settings::parseInput(int argc, char** argv)
                 mSimulatedDelayRel = atof(endp+1);
             }
             break;
-        case 'm': // Monitor output
-            mMonitorQueue = atoi(optarg);
+        case OPT_BROADCAST: // Broadcast output
+            mBroadcastQueue = atoi(optarg);
             break;
         case 'h':
             //-------------------------------------------------------
@@ -445,7 +457,7 @@ void Settings::printUsage()
     cout << " --localaddress                           Change default local host IP address (default: 127.0.0.1)" << endl;
     cout << " --nojackportsconnect                     Don't connect default audio ports in jack" << endl;
     cout << " --bufstrategy     # (0, 1, 2)            Use alternative jitter buffer" << endl;
-    cout << " -m, --monitor <monitor_queue>            Turn on monitor output ports with extra queue (requires new jitter buffer)" << endl;
+    cout << " --broadcast <broadcast_queue>            Turn on broadcast output ports with extra queue (requires new jitter buffer)" << endl;
     cout << endl;
     cout << "ARGUMENTS TO USE JACKTRIP WITHOUT JACK:" << endl;
     cout << " --rtaudio                                Use system's default sound system instead of Jack" << endl;
@@ -594,7 +606,7 @@ void Settings::startJackTrip()
         mJackTrip->setBufferStrategy(getBufferStrategy());
         mJackTrip->setNetIssuesSimulation(getSimulatedLossRate(),
             getSimulatedJitterRate(), getSimulatedDelayRel());
-        mJackTrip->setMonitor(getMonitorQueue());
+        mJackTrip->setBroadcast(getBroadcastQueue());
 
         // Add Plugins
         if ( mLoopBack ) {

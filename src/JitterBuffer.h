@@ -43,13 +43,15 @@
 class JitterBuffer : public RingBuffer
 {
 public:
-    JitterBuffer(int slot_size, int max_latency, int total_size, int strategy,
-                                int monitor_latency, int channels, int bit_res);
+    JitterBuffer(int buf_samples, int qlen, int sample_rate, int strategy,
+                                int bcast_qlen, int channels, int bit_res);
     virtual ~JitterBuffer() {}
 
     virtual bool insertSlotNonBlocking(const int8_t* ptrToSlot, int len, int lostLen);
     virtual void readSlotNonBlocking(int8_t* ptrToReadSlot);
-    virtual void readMonitorSlot(int8_t* ptrToReadSlot);
+    virtual void readBroadcastSlot(int8_t* ptrToReadSlot);
+
+    virtual bool getStats(IOStat* stat, bool reset);
 
 protected:
     void processPacketLoss(int lostLen);
@@ -59,15 +61,29 @@ protected:
     int mNumChannels;
     int mAudioBitRes;
     int mMinStepSize;
+    int mFPP;
+    int mSampleRate;
+    int mInSlotSize;
     bool mActive;
-    uint32_t mMonitorLatency;
-    uint32_t mMonitorPosition;
-    double  mMonitorPositionCorr;
+    uint32_t mBroadcastLatency;
+    uint32_t mBroadcastPosition;
+    double  mBroadcastPositionCorr;
 
     double mUnderrunIncTolerance;
     double mCorrIncTolerance;
     double mOverflowDecTolerance;
     int    mOverflowDropStep;
+    uint32_t mLastCorrCounter;
+    int    mLastCorrDirection;
+    double mMinLevelThreshold;
+    double lastCorrFactor() const {return 500.0 / std::max(500U, mLastCorrCounter);}
+
+    int    mAutoQueue;
+    double mAutoQueueCorr;
+    double mAutoQFactor;
+    double mAutoQRate;
+    double mAutoQRateMin;
+    double mAutoQRateDecay;
 };
 
 
