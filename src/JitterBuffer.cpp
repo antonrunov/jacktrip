@@ -220,9 +220,10 @@ void JitterBuffer::readSlotNonBlocking(int8_t* ptrToReadSlot)
     if (0 != mAutoQueue) {
         int PPS = mSampleRate / mFPP;
         if (2*PPS == mAutoQueue++ % (4*PPS)) {
+            double k = 1.0 + 1e-5/mAutoQFactor;
             if (12*PPS > mAutoQueue ||
-                    std::abs(mAutoQueueCorr - mMaxLatency + mSlotSize/2) > 0.6*mSlotSize) {
-                mMaxLatency = mSlotSize * std::ceil(mAutoQueueCorr/mSlotSize);
+                    std::abs(mAutoQueueCorr*k - mMaxLatency + mSlotSize/2) > 0.6*mSlotSize) {
+                mMaxLatency = mSlotSize * std::ceil(mAutoQueueCorr*k/mSlotSize);
                 cout << "AutoQueue: " << mMaxLatency / mSlotSize << endl;
             }
         }
