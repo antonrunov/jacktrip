@@ -323,9 +323,11 @@ void JitterBuffer::processPacketLoss(int lostLen)
         mLastCorrCounter = 0;
         mLastCorrDirection = 1;
     }
-    else if (mOverflowDecTolerance > mMaxLatency || // for strategies 0,1
-            (0 < mLastCorrDirection && mLevelCur >
-                mMaxLatency - mOverflowDecTolerance*(1.1 - lastCorrFactor()))) {
+    else if (mSlotSize < available + lostLen && (
+            mOverflowDecTolerance > mMaxLatency   // for strategies 0,1
+            || (0 < mLastCorrDirection && mLevelCur >
+                    mMaxLatency - mOverflowDecTolerance*(1.1 - lastCorrFactor()))
+            )) {
         delta = std::min(lostLen, mSlotSize);
         lostLen -= delta;
         mBufDecPktLoss += delta;
@@ -335,7 +337,7 @@ void JitterBuffer::processPacketLoss(int lostLen)
     }
     if (lostLen >= mTotalSize) {
         std::memset(mRingBuffer, 0, mTotalSize);
-        mUnderruns += lostLen;
+        mUnderruns += std::max(0, lostLen - std::max(0, -available));
     }
     else if (0 < lostLen) {
         int wpos = mWritePosition % mTotalSize;
@@ -345,7 +347,7 @@ void JitterBuffer::processPacketLoss(int lostLen)
             //cout << "split write: " << lostLen << "-" << n << endl;
             std::memset(mRingBuffer, 0, lostLen-n);
         }
-        mUnderruns += lostLen;
+        mUnderruns += std::max(0, lostLen - std::max(0, -available));
     }
     mWritePosition += lostLen;
 }
