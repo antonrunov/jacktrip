@@ -96,7 +96,7 @@ void JackAudioInterface::setupClient()
 {  
   const char* client_name = mClientName;
   const char* server_name = NULL;
-  jack_options_t options = JackNoStartServer;
+  jack_options_t options = JackNullOption;
   jack_status_t status;
 
   // Try to connect to the server

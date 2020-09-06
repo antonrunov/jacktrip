@@ -77,6 +77,8 @@ mUdpRedundancyFactor(udp_redundancy_factor)
     QObject::connect(this, SIGNAL(signalWatingTooLong(int)),
                      jacktrip, SLOT(slotUdpWatingTooLong(int)), Qt::QueuedConnection);
   }
+
+  mNoDataReported = false;
 }
 
 
@@ -370,6 +372,7 @@ void UdpDataProtocol::run()
       // Wait for the first packet to be ready and obtain address
       // from that packet
       std::cout << "Waiting for Peer..." << std::endl;
+      emit statusChanged(1, "Waiting for Peer...");
       // This blocks waiting for the first packet
       while ( !UdpSocket.hasPendingDatagrams() ) {
         if (mStopped) { return; }
@@ -387,6 +390,7 @@ void UdpDataProtocol::run()
       mJackTrip->parseAudioPacket(mFullPacket, mAudioPacket);
       std::cout << "Received Connection for Peer!" << std::endl;
       emit signalReceivedConnectionFromPeer();
+      emit statusChanged(2, "Connected");
 
       // Redundancy Variables
       // --------------------
@@ -475,6 +479,9 @@ bool UdpDataProtocol::waitForReady(QUdpSocket& UdpSocket, int timeout_msec)
   if ( ellaped_time_usec >= timeout_usec )
   {
     emit signalWatingTooLong(ellaped_time_usec/1000);
+    emit statusChanged(3, "No Data from Peer...");
+    mNoDataReported = true;
+
     return false;
   }
   return true;
@@ -503,6 +510,12 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
   // This is blocking until we get a packet...
   receivePacket( UdpSocket, reinterpret_cast<char*>(full_redundant_packet),
                  full_redundant_packet_size);
+
+  if (mNoDataReported) {
+      mNoDataReported = false;
+      emit statusChanged(2, "Connected");
+  }
+
 
   // Get Packet Sequence Number
   newer_seq_num =

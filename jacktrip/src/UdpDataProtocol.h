@@ -199,6 +199,8 @@ private:
 
   unsigned int mUdpRedundancyFactor; ///< Factor of redundancy
   static QMutex sUdpMutex; ///< Mutex to make thread safe the binding process
+
+  bool mNoDataReported;
 };
 
 #endif // __UDPDATAPROTOCOL_H__

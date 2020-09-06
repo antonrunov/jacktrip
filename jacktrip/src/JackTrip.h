@@ -389,6 +389,7 @@ signals:
   /// \brief Signal emitted when no UDP Packets have been received for a while
   void signalNoUdpPacketsForSeconds();
   void signalTcpClientConnected();
+  void statusChanged(int status, const QString& msg);
 
 
 public:

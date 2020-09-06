@@ -75,7 +75,30 @@ public slots:
   void slotExitProgram()
   {
     std::cerr << "Exiting JackTrip..." << std::endl;
-    std::exit(1);
+    exit();
+  }
+
+signals:
+    void statusChanged(int status, const QString& msg);
+
+protected:
+  virtual void run() {
+    try
+    {
+      startJackTrip();
+    }
+    catch ( const std::exception & e )
+    {
+      std::cerr << "ERROR:" << std::endl;
+      std::cerr << e.what() << std::endl;
+      std::cerr << "Exiting JackTrip..." << std::endl;
+      std::cerr << gPrintSeparator << std::endl;
+    }
+    exec();
+    if (NULL != mJackTrip) {
+      delete mJackTrip;
+      mJackTrip = NULL;
+    }
   }
 
 private:

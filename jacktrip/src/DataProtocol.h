@@ -169,6 +169,7 @@ signals:
 
   void signalError(const char* error_message);
   void signalReceivedConnectionFromPeer();
+  void statusChanged(int status, const QString& msg);
 
 
 protected:

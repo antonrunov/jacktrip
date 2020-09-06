@@ -209,7 +209,8 @@ int win_priority()
 void set_crossplatform_realtime_priority()
 {
 #if defined ( __LINUX__ )
-  set_fifo_priority (false);
+  //TODO
+  //set_fifo_priority (false);
 #endif //__LINUX__
 #if defined ( __MAC_OSX__ )
   set_realtime(1250000,60000,90000);

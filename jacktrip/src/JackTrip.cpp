@@ -340,6 +340,12 @@ void JackTrip::startProcess() throw(std::invalid_argument)
     break;
   }
 
+  if (mStopped) {
+    return;
+  }
+  QObject::connect(mDataProtocolReceiver, SIGNAL(statusChanged(int,const QString&)),
+      this, SIGNAL(statusChanged(int,const QString&)), Qt::QueuedConnection);
+
   // Start Threads
   mAudioInterface->startProcess();
 
@@ -414,6 +420,7 @@ int JackTrip::serverStart(bool timeout, int udpTimeout)
 
   // Get the client address when it connects
   cout << "Waiting for Connection From Client..." << endl;
+  emit statusChanged(0, "Waiting for Connection From a Client...");
   QHostAddress peerHostAddress;
   uint16_t peer_port;
   QUdpSocket UdpSockTemp;// Create socket to wait for client
