@@ -111,7 +111,9 @@ public:
         CLIENTECHO,  ///< Client Echo (client self-to-self)
         CLIENTFOFI,  ///< Client Fan Out to Clients and Fan In from Clients (but not self-to-self)
         RESERVEDMATRIX,  ///< Reserved for custom patch matrix (for TUB ensemble)
-        FULLMIX  ///< Client Fan Out to Clients and Fan In from Clients (including self-to-self)
+        FULLMIX,  ///< Client Fan Out to Clients and Fan In from Clients (including self-to-self)
+        PANSTEREO,  ///< Based off of RESERVEDMATRIX (for Stanford ensembles)
+        PANFOFI  ///< Meld of PANSTEREO and CLIENTFOFI(for Stanford ensembles)
     };
     //---------------------------------------------------------
 
@@ -140,7 +142,8 @@ public:
              int receiver_bind_port = gDefaultPort,
              int sender_bind_port = gDefaultPort,
              int receiver_peer_port = gDefaultPort,
-             int sender_peer_port = gDefaultPort);
+             int sender_peer_port = gDefaultPort,
+             int tcp_peer_port = gDefaultPort);
 
     /// \brief The class destructor
     virtual ~JackTrip();
@@ -161,7 +164,7 @@ public:
 
     /// \brief Start the processing threads
     virtual void startProcess(
-        #ifdef WAIRTOMASTER // wair
+        #ifdef WAIRTOHUB // wair
             int ID
         #endif // endwhere
             );
@@ -216,13 +219,13 @@ public:
         mReceiverPeerPort = port;
     }
     /// \brief Sets port numbers to bind in RECEIVER and SENDER sockets.
-    virtual void setBindPorts(int port)
+    void setBindPorts(int port)
     {
         mReceiverBindPort = port;
         mSenderBindPort = port;
     }
     /// \brief Sets port numbers for the peer (remote) machine.
-    virtual void setPeerPorts(int port)
+    void setPeerPorts(int port)
     {
         mSenderPeerPort = port;
         mReceiverPeerPort = port;
@@ -449,7 +452,7 @@ public:
 
     /// \brief Set the AudioInteface object
     virtual void setupAudio(
-        #ifdef WAIRTOMASTER // WAIR
+        #ifdef WAIRTOHUB // WAIR
             int ID
         #endif // endwhere
             );

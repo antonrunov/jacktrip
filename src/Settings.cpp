@@ -39,12 +39,13 @@
 #include "LoopBack.h"
 #include "NetKS.h"
 
+#include "gainStereo.dsp.h"
 #ifdef WAIR // wair
 #include "ap8x2.dsp.h"
 #include "Stk16.dsp.h"
 #endif // endwhere
 
-#include "UdpMasterListener.h"
+#include "UdpHubListener.h"
 #include "JackTripWorker.h"
 #include "jacktrip_globals.h"
 
@@ -74,6 +75,7 @@ Settings::Settings() :
     mBufferQueueLength(gDefaultQueueLength),
     mAudioBitResolution(AudioInterface::BIT16),
     mBindPortNum(gDefaultPort), mPeerPortNum(gDefaultPort),
+    mServerUdpPortNum(NULL),
     mClientName(NULL),
     mUnderrrunZero(false),
     mBufferStrategy(1),
@@ -138,6 +140,7 @@ void Settings::parseInput(int argc, char** argv)
     { "portoffset", required_argument, NULL, 'o' }, // Port Offset from 4464
     { "bindport", required_argument, NULL, 'B' }, // Port Offset from 4464
     { "peerport", required_argument, NULL, 'P' }, // Port Offset from 4464
+    { "udpbaseport", required_argument, NULL, 'U' }, // Server udp base port (defaults to 61002)
     { "queue", required_argument, NULL, 'q' }, // Queue Length
     { "redundancy", required_argument, NULL, 'r' }, // Redundancy
     { "bitres", required_argument, NULL, 'b' }, // Audio Bit Resolution
@@ -169,12 +172,15 @@ void Settings::parseInput(int argc, char** argv)
     /// \todo Specify mandatory arguments
     int ch;
     while ( (ch = getopt_long(argc, argv,
-                              "n:N:H:sc:SC:o:B:P:q:r:b:zlwjeJ:RTd:F:p:DvVh", longopts, NULL)) != -1 )
+                              "n:N:H:sc:SC:o:B:P:U:q:r:b:zlwjeJ:RTd:F:p:DvVh", longopts, NULL)) != -1 )
         switch (ch) {
 
         case 'n': // Number of input and output channels
             //-------------------------------------------------------
             mNumChans = atoi(optarg);
+            break;
+        case 'U': // UDP Bind Port
+            mServerUdpPortNum = atoi(optarg);
             break;
 #ifdef WAIR
         case 'w':
@@ -217,14 +223,18 @@ void Settings::parseInput(int argc, char** argv)
             //-------------------------------------------------------
             mBindPortNum += atoi(optarg);
             mPeerPortNum += atoi(optarg);
+            if (gVerboseFlag) std::cout << "SETTINGS: argument parsed for TCP Bind Port: " << mBindPortNum << std::endl;
+            if (gVerboseFlag) std::cout << "SETTINGS: argument parsed for TCP Peer Port: " << mPeerPortNum << std::endl;
             break;
         case 'B': // Bind Port
             //-------------------------------------------------------
             mBindPortNum = atoi(optarg);
+            if (gVerboseFlag) std::cout << "SETTINGS: argument parsed for TCP Bind Port: " << mBindPortNum << std::endl;
             break;
         case 'P': // Peer Port
             //-------------------------------------------------------
             mPeerPortNum = atoi(optarg);
+            if (gVerboseFlag) std::cout << "SETTINGS: argument parsed for TCP Peer Port: " << mPeerPortNum << std::endl;
             break;
         case 'b':
             //-------------------------------------------------------
@@ -314,7 +324,7 @@ void Settings::parseInput(int argc, char** argv)
         case 'v':
             //-------------------------------------------------------
             cout << "JackTrip VERSION: " << gVersion << endl;
-            cout << "Copyright (c) 2008-2018 Juan-Pablo Caceres, Chris Chafe." << endl;
+            cout << "Copyright (c) 2008-2020 Juan-Pablo Caceres, Chris Chafe." << endl;
             cout << "SoundWIRE group at CCRMA, Stanford University" << endl;
             cout << "" << endl;
             std::exit(0);
@@ -336,6 +346,8 @@ void Settings::parseInput(int argc, char** argv)
                 mHubConnectionMode = JackTrip::RESERVEDMATRIX; }
             else if ( atoi(optarg) == 4 ) {
                 mHubConnectionMode = JackTrip::FULLMIX; }
+            else if ( atoi(optarg) == 5 ) {
+                mHubConnectionMode = JackTrip::PANSTEREO; }
             else {
                 std::cerr << "-p ERROR: Wrong HubConnectionMode: "
                           << atoi(optarg) << " is not supported." << endl;
@@ -418,7 +430,7 @@ void Settings::printUsage()
     cout << "" << endl;
     cout << "JackTrip: A System for High-Quality Audio Network Performance" << endl;
     cout << "over the Internet" << endl;
-    cout << "Copyright (c) 2008-2018 Juan-Pablo Caceres, Chris Chafe." << endl;
+    cout << "Copyright (c) 2008-2020 Juan-Pablo Caceres, Chris Chafe." << endl;
     cout << "SoundWIRE group at CCRMA, Stanford University" << endl;
     cout << "VERSION: " << gVersion << endl;
     cout << "" << endl;
@@ -445,17 +457,18 @@ void Settings::printUsage()
          << gDefaultQueueLength << ")" << endl;
     cout << " -r, --redundancy  # (1 or more)          Packet Redundancy to avoid glitches with packet losses (default: 1)"
          << endl;
-    cout << " -o, --portoffset  #                      Receiving port offset from base port " << gDefaultPort << endl;
-    cout << " --bindport        #                      Set only the bind port number (default: 4464)" << endl;
-    cout << " --peerport        #                      Set only the Peer port number (default: 4464)" << endl;
+    cout << " -o, --portoffset  #                      Receiving bind port and peer port offset from default " << gDefaultPort << endl;
+    cout << " -B, --bindport        #                  Set only the bind port number (default: " << gDefaultPort << ")" << endl;
+    cout << " -P, --peerport        #                  Set only the peer port number (default: " << gDefaultPort << ")" << endl;
+    cout << " -U, --udpbaseport                        Set only the server udp base port number (default: 61002)" << endl;
     cout << " -b, --bitres      # (8, 16, 24, 32)      Audio Bit Rate Resolutions (default: 16)" << endl;
-    cout << " -p, --hubpatch    # (0, 1, 2, 3, 4)      Hub auto audio patch, only has effect if running HUB SERVER mode, 0=server-to-clients, 1=client loopback, 2=client fan out/in but not loopback, 3=reserved for TUB, 4=full mix (default: 0)" << endl;
+    cout << " -p, --hubpatch    # (0, 1, 2, 3, 4, 5, 6)      Hub auto audio patch, only has effect if running HUB SERVER mode, 0=server-to-clients, 1=client loopback, 2=clients can hear all clients except themselves, 3=reserved for TUB, 4=full mix , i.e. clients auto-connect and hear all clients including themselves, 5=(4) + pan each separately + reverb, 6=(2) + pan each separately +reverb (default: 0)" << endl;
     cout << " -z, --zerounderrun                       Set buffer to zeros when underrun occurs (default: wavetable)" << endl;
     cout << " -l, --loopback                           Run in Loop-Back Mode" << endl;
     cout << " -j, --jamlink                            Run in JamLink Mode (Connect to a JamLink Box)" << endl;
     cout << " --clientname                             Change default client name (default: JackTrip)" << endl;
     cout << " --localaddress                           Change default local host IP address (default: 127.0.0.1)" << endl;
-    cout << " --nojackportsconnect                     Don't connect default audio ports in jack" << endl;
+    cout << " --nojackportsconnect                     Don't connect default audio ports in jack, including not doing hub auto audio patch in HUB SERVER mode." << endl;
     cout << " --bufstrategy     # (0, 1, 2)            Use alternative jitter buffer" << endl;
     cout << " --broadcast <broadcast_queue>            Turn on broadcast output ports with extra queue (requires new jitter buffer)" << endl;
     cout << endl;
@@ -466,8 +479,8 @@ void Settings::printUsage()
     cout << "   --deviceid      #                      The rtaudio device id --rtaudio mode only (default: 0)" << endl;
     cout << endl;
     cout << "ARGUMENTS TO DISPLAY IO STATISTICS:" << endl;
-    cout << " --iostat <time_in_secs>                  Turn on IO stat reporting with specified interval (in seconds)" << endl;
-    cout << " --iostatlog <log_file>                   Save stat log into a file (default: print in stdout)" << endl;
+    cout << " -I, --iostat <time_in_secs>              Turn on IO stat reporting with specified interval (in seconds)" << endl;
+    cout << " -G, --iostatlog <log_file>               Save stat log into a file (default: print in stdout)" << endl;
     cout << endl;
     cout << "ARGUMENTS TO SIMULATE NETWORK ISSUES:" << endl;
     cout << " --simloss <rate>                         Simulate packet loss" << endl;
@@ -487,7 +500,8 @@ void Settings::startJackTrip()
 
     /// \todo Change this, just here to test
     if ( mJackTripServer ) {
-        UdpMasterListener* udpmaster = new UdpMasterListener;
+        if (gVerboseFlag) std::cout << "JackTrip HUB SERVER TCP Bind Port: " << mBindPortNum << std::endl;
+        UdpHubListener* udpmaster = new UdpHubListener(mBindPortNum,mServerUdpPortNum);
         udpmaster->setSettings(this);
 #ifdef WAIR // WAIR
         udpmaster->setWAIR(mWAIR);
@@ -531,7 +545,15 @@ void Settings::startJackTrip()
                          #ifdef WAIR // wair
                                  mNumNetRevChans,
                          #endif // endwhere
-                                 mBufferQueueLength, mRedundancy, mAudioBitResolution);
+                                 mBufferQueueLength, mRedundancy, mAudioBitResolution,
+                                 /*DataProtocol::packetHeaderTypeT PacketHeaderType = */DataProtocol::DEFAULT,
+                                 /*underrunModeT UnderRunMode = */ mUnderRunMode,
+                                 /* int receiver_bind_port = */ gDefaultPort,
+                                 /*int sender_bind_port = */ gDefaultPort,
+                                 /*int receiver_peer_port = */ gDefaultPort,
+                                 /* int sender_peer_port = */ gDefaultPort,
+                                 mPeerPortNum
+                                 );
 
         // Set connect or not default audio ports. Only work for jack
         mJackTrip->setConnectDefaultAudioPorts(mConnectDefaultAudioPorts);
@@ -550,6 +572,10 @@ void Settings::startJackTrip()
             cout << "Setting buffers to zero when underrun..." << endl;
             cout << gPrintSeparator << std::endl;
             mJackTrip->setUnderRunMode(JackTrip::ZEROS);
+        } else {
+            cout << "Setting buffers to wavetable when underrun..." << endl;
+            cout << gPrintSeparator << std::endl;
+            mJackTrip->setUnderRunMode(JackTrip::WAVETABLE);
         }
 
         // Set peer address in server mode
@@ -627,7 +653,7 @@ void Settings::startJackTrip()
             //netks->play();
             // -------------------------------------------------------------
         }
-
+        mJackTrip->appendProcessPlugin(new gainStereo(mNumChans)); // plugin slot 0
 #ifdef WAIR // WAIR
         if ( mWAIR ) {
             cout << "Running in WAIR Mode..." << endl;
@@ -653,7 +679,7 @@ void Settings::startJackTrip()
         // Start JackTrip
         if (gVerboseFlag) std::cout << "Settings:startJackTrip before mJackTrip->startProcess" << std::endl;
         mJackTrip->startProcess(
-            #ifdef WAIRTOMASTER // WAIR
+            #ifdef WAIRTOHUB // WAIR
                     0 // for WAIR compatibility, ID in jack client name
             #endif // endwhere
                     );

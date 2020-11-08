@@ -80,7 +80,7 @@ JackTrip::JackTrip(jacktripModeT JacktripMode,
                    DataProtocol::packetHeaderTypeT PacketHeaderType,
                    underrunModeT UnderRunMode,
                    int receiver_bind_port, int sender_bind_port,
-                   int receiver_peer_port, int sender_peer_port) :
+                   int receiver_peer_port, int sender_peer_port, int tcp_peer_port) :
     mJackTripMode(JacktripMode),
     mDataProtocol(DataProtocolType),
     mPacketHeaderType(PacketHeaderType),
@@ -107,9 +107,9 @@ JackTrip::JackTrip(jacktripModeT JacktripMode,
     mSenderPeerPort(sender_peer_port),
     mSenderBindPort(sender_bind_port),
     mReceiverPeerPort(receiver_peer_port),
-    mTcpServerPort(4464),
+    mTcpServerPort(tcp_peer_port),
     mRedundancy(redundancy),
-    mJackClientName("JackTrip"),
+    mJackClientName(gJackDefaultClientName),
     mConnectionMode(JackTrip::NORMAL),
     mReceivedConnection(false),
     mTcpConnectionError(false),
@@ -136,7 +136,7 @@ JackTrip::~JackTrip()
 
 //*******************************************************************************
 void JackTrip::setupAudio(
-        #ifdef WAIRTOMASTER // WAIR
+        #ifdef WAIRTOHUB // WAIR
         int ID
         #endif // endwhere
         )
@@ -159,15 +159,18 @@ void JackTrip::setupAudio(
                                          #endif // endwhere
                                                  mAudioBitResolution);
 
-#ifdef WAIRTOMASTER // WAIR
+#ifdef WAIRTOHUB // WAIR
         qDebug() << "mPeerAddress" << mPeerAddress << mPeerAddress.contains(gDOMAIN_TRIPLE);
         QString VARIABLE_AUDIO_NAME = WAIR_AUDIO_NAME; // legacy for WAIR
         QByteArray tmp = QString(mPeerAddress).replace(":", ".").toLatin1();
-        if(mPeerAddress.toStdString()!="")
-            mJackClientName = tmp.constData();
-        std::cout  << "WAIR ID " << ID << " jacktrip client name set to=" <<
-                      mJackClientName << std::endl;
+        //Set our Jack client name if we're a hub server or a custom name hasn't been set
+	      if ( mPeerAddress.toStdString() != "" &&
+	          (mJackClientName == gJackDefaultClientName || mJackTripMode == SERVERPINGSERVER)) {
+            mJackClientName = QString(mPeerAddress).replace(":", ".").toLatin1().constData();
+        }
 
+//        std::cout  << "WAIR ID " << ID << " jacktrip client name set to=" <<
+//                      mJackClientName << std::endl;
 #endif // endwhere
 
         mAudioInterface->setClientName(mJackClientName);
@@ -177,8 +180,11 @@ void JackTrip::setupAudio(
 
         if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->setup" << std::endl;
         mAudioInterface->setup();
+        if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->getSampleRate" << std::endl;
         mSampleRate = mAudioInterface->getSampleRate();
+        if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->getDeviceID" << std::endl;
         mDeviceID = mAudioInterface->getDeviceID();
+        if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->getBufferSizeInSamples" << std::endl;
         mAudioBufferSize = mAudioInterface->getBufferSizeInSamples();
 #endif //__NON_JACK__
 #ifdef __NO_JACK__ /// \todo FIX THIS REPETITION OF CODE
@@ -351,7 +357,7 @@ void JackTrip::appendProcessPlugin(ProcessPlugin* plugin)
 
 //*******************************************************************************
 void JackTrip::startProcess(
-        #ifdef WAIRTOMASTER // WAIR
+        #ifdef WAIRTOHUB // WAIR
         int ID
         #endif // endwhere
         )
@@ -368,10 +374,8 @@ void JackTrip::startProcess(
 
     if (gVerboseFlag) std::cout << "  JackTrip:startProcess before checkIfPortIsBinded(mReceiverBindPort)" << std::endl;
 #if defined __WIN_32__
-    //cc fixed windows crash with this print statement!
-    qDebug() << "before  mJackTrip->startProcess"
-             << mReceiverBindPort<< mSenderBindPort;
-    //        msleep(2000);
+    //cc fixed windows crash with this print statement! hope to delete
+//    qDebug() << "before  mJackTrip->startProcess"  << mReceiverBindPort<< mSenderBindPort;
 #endif
     checkIfPortIsBinded(mReceiverBindPort);
     if (gVerboseFlag) std::cout << "  JackTrip:startProcess before checkIfPortIsBinded(mSenderBindPort)" << std::endl;
@@ -380,7 +384,7 @@ void JackTrip::startProcess(
     // ------------------------------
     if (gVerboseFlag) std::cout << "  JackTrip:startProcess before setupAudio" << std::endl;
     setupAudio(
-            #ifdef WAIRTOMASTER // wair
+            #ifdef WAIRTOHUB // wair
                 ID
             #endif // endwhere
                 );
@@ -703,9 +707,9 @@ int JackTrip::clientPingToServerStart()
     // Connect Socket to Server and wait for response
     // ----------------------------------------------
     tcpClient.connectToHost(serverHostAddress, mTcpServerPort);
-    if (gVerboseFlag) cout << "Connecting to TCP Server..." << endl;
+    if (gVerboseFlag) cout << "Connecting to TCP Server at " <<  serverHostAddress.toString().toLatin1().constData() << " port " << mTcpServerPort << "..." << endl;
     if (!tcpClient.waitForConnected()) {
-        std::cerr << "TCP Socket ERROR: " << tcpClient.errorString().toStdString() <<  endl;
+        std::cerr << "TCP Socket ERROR at " << mTcpServerPort << ": " << tcpClient.errorString().toStdString() <<  endl;
         //std::exit(1);
         return -1;
     }
@@ -721,7 +725,7 @@ int JackTrip::clientPingToServerStart()
     while ( tcpClient.bytesToWrite() > 0 ) {
         tcpClient.waitForBytesWritten(-1);
     }
-    if (gVerboseFlag) cout << "Port sent to Server" << endl;
+    if (gVerboseFlag) cout << "Port " << mReceiverBindPort << " sent to Server" << endl;
 
     // Read the size of the package
     // ----------------------------
@@ -748,7 +752,7 @@ int JackTrip::clientPingToServerStart()
     // --------------------
     tcpClient.close(); // Close the socket
     //cout << "TCP Socket Closed!" << endl;
-    if (gVerboseFlag) cout << "Connection Succesfull!" << endl;
+    if (gVerboseFlag) cout << "Connection Successful!" << endl;
 
     // Set with the received UDP port
     // ------------------------------

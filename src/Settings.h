@@ -99,8 +99,10 @@ private:
     QString mPeerAddress; ///< Peer Address to use in jacktripModeT::CLIENT Mode
     int mBindPortNum; ///< Bind Port Number
     int mPeerPortNum; ///< Peer Port Number
+    int mServerUdpPortNum;
     char* mClientName; ///< JackClient Name
     bool mUnderrrunZero; ///< Use Underrun to Zero mode
+    JackTrip::underrunModeT mUnderRunMode;
     int mBufferStrategy;
 
 #ifdef WAIR // wair

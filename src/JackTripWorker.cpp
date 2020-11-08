@@ -44,7 +44,7 @@
 
 #include "JackTripWorker.h"
 #include "JackTrip.h"
-#include "UdpMasterListener.h"
+#include "UdpHubListener.h"
 #include "NetKS.h"
 #include "LoopBack.h"
 #include "Settings.h"
@@ -58,8 +58,8 @@
 using std::cout; using std::endl;
 
 //*******************************************************************************
-JackTripWorker::JackTripWorker(UdpMasterListener* udpmasterlistener, int BufferQueueLength, JackTrip::underrunModeT UnderRunMode) :
-    mUdpMasterListener(udpmasterlistener),
+JackTripWorker::JackTripWorker(UdpHubListener* udpmasterlistener, int BufferQueueLength, JackTrip::underrunModeT UnderRunMode) :
+    mUdpHubListener(udpmasterlistener),
     m_connectDefaultAudioPorts(false),
     mBufferQueueLength(BufferQueueLength),
     mUnderRunMode(UnderRunMode),
@@ -80,7 +80,7 @@ JackTripWorker::JackTripWorker(UdpMasterListener* udpmasterlistener, int BufferQ
 //*******************************************************************************
 JackTripWorker::~JackTripWorker()
 {
-    //delete mUdpMasterListener;
+    //delete mUdpHubListener;
 }
 
 
@@ -128,14 +128,14 @@ void JackTripWorker::run()
         // Create and setup JackTrip Object
         //JackTrip jacktrip(JackTrip::SERVER, JackTrip::UDP, mNumChans, 2);
         if (gVerboseFlag) cout << "---> JackTripWorker: Creating jacktrip objects..." << endl;
-        Settings* settings = mUdpMasterListener->getSettings();
+        Settings* settings = mUdpHubListener->getSettings();
 
 #ifdef WAIR // WAIR
         // forces    BufferQueueLength to 2
         // need to parse numNetChans from incoming header
         // but force to 16 for now
 #define FORCEBUFFERQ 2
-        if (mUdpMasterListener->isWAIR()) { // invoked with -Sw
+        if (mUdpHubListener->isWAIR()) { // invoked with -Sw
             mWAIR = true;
             mNumNetRevChans = NUMNETREVCHANSbecauseNOTINRECEIVEDheader;
         } else {};
@@ -214,7 +214,7 @@ void JackTripWorker::run()
         if (gVerboseFlag) cout << "---> JackTripWorker: setJackTripFromClientHeader..." << endl;
         int PeerConnectionMode = setJackTripFromClientHeader(jacktrip);
         if ( PeerConnectionMode == -1 ) {
-            mUdpMasterListener->releaseThread(mID);
+            mUdpHubListener->releaseThread(mID);
             { QMutexLocker locker(&mMutex); mSpawning = false; }
             return;
         }
@@ -222,7 +222,7 @@ void JackTripWorker::run()
         // Start Threads and event loop
         if (gVerboseFlag) cout << "---> JackTripWorker: startProcess..." << endl;
         jacktrip.startProcess(
-            #ifdef WAIRTOMASTER // wair
+            #ifdef WAIRTOHUB // wair
                     mID
             #endif // endwhere
                     );
@@ -249,14 +249,14 @@ void JackTripWorker::run()
         std::cerr << "Couldn't send thread to the Pool" << endl;
         std::cerr << e.what() << endl;
         std::cerr << gPrintSeparator << endl;
-        mUdpMasterListener->releaseThread(mID);
+        mUdpHubListener->releaseThread(mID);
         { QMutexLocker locker(&mMutex); mSpawning = false; }
         return;
     }
 
     {
         QMutexLocker locker(&mMutex);
-        mUdpMasterListener->releaseThread(mID);
+        mUdpHubListener->releaseThread(mID);
     }
 
     cout << "JackTrip ID = " << mID << " released from the THREAD POOL" << endl;

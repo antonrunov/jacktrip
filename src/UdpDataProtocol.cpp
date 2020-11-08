@@ -51,7 +51,7 @@
 #include <winsock2.h> //cc need SD_SEND
 #include <ws2tcpip.h> // for IPv6
 #endif
-#if defined (__LINUX__) || (__MAC__OSX__)
+#if defined (__LINUX__) || (__MAC_OSX__)
 #include <sys/socket.h> // for POSIX Sockets
 #endif
 
@@ -104,7 +104,7 @@ UdpDataProtocol::~UdpDataProtocol()
 void UdpDataProtocol::setPeerAddress(const char* peerHostOrIP)
 {
     // Get DNS Address
-#if defined (__LINUX__) || (__MAC__OSX__)
+#if defined (__LINUX__) || (__MAC_OSX__)
     //Don't make the following code conditional on windows
     //(Addresses a weird timing bug when in hub client mode)
     if (!mPeerAddress.setAddress(peerHostOrIP)) {
@@ -116,7 +116,7 @@ void UdpDataProtocol::setPeerAddress(const char* peerHostOrIP)
         }
         //cout << "UdpDataProtocol::setPeerAddress IP Address Number: "
         //    << mPeerAddress.toString().toStdString() << endl;
-#if defined (__LINUX__) || (__MAC__OSX__)
+#if defined (__LINUX__) || (__MAC_OSX__)
     }
 #endif
 
@@ -191,7 +191,7 @@ int UdpDataProtocol::bindSocket()
     WSADATA wsaData;
     int err;
 
-    wVersionRequested = MAKEWORD( 1, 1 );
+    wVersionRequested = MAKEWORD( 2, 2 );
 
     err = WSAStartup( wVersionRequested, &wsaData );
     if ( err != 0 ) {
@@ -203,8 +203,8 @@ int UdpDataProtocol::bindSocket()
 
     // Confirm that the Windows Sockets DLL supports 1.1. or higher
 
-    if ( LOBYTE( wsaData.wVersion ) != 1 ||
-         HIBYTE( wsaData.wVersion ) != 1 ) {
+    if ( LOBYTE( wsaData.wVersion ) != 2 ||
+         HIBYTE( wsaData.wVersion ) != 2 ) {
         // Tell the user that we couldn't find a useable
         // winsock.dll.
         WSACleanup( );
@@ -657,7 +657,7 @@ void UdpDataProtocol::printUdpWaitedTooLong(int wait_msec)
 {
     int wait_time = 30; // msec
     if ( !(wait_msec%wait_time) ) {
-        std::cerr << "UDP waiting too long (more than " << wait_time << "ms)..." << endl;
+        std::cerr << "UDP waiting too long (more than " << wait_time << "ms) for " << mPeerAddress.toString().toStdString() << "..." << endl;
     }
 }
 
