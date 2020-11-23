@@ -155,6 +155,7 @@ public:
   { mBufferSizeInSamples = buf_size; }
   /// \brief Set Client Name to something different that the default (JackTrip)
   virtual void setClientName(const char* ClientName) = 0;
+  virtual void setAudioDevices(unsigned int in_dev, unsigned int out_dev) {}
   //------------------------------------------------------------------
 
   //--------------GETTERS---------------------------------------------
@@ -185,7 +186,7 @@ public:
   //------------------------------------------------------------------
 
 
-private:
+protected:
 
   /// \brief Compute the process to receive packets
   void computeProcessFromNetwork(QVarLengthArray<sample_t*>& out_buffer,
@@ -193,6 +194,8 @@ private:
   /// \brief Compute the process to send packets
   void computeProcessToNetwork(QVarLengthArray<sample_t*>& in_buffer,
                                unsigned int n_frames);
+
+private:
 
   JackTrip* mJackTrip; ///< JackTrip Mediator Class pointer
   int mNumInChans;///< Number of Input Channels

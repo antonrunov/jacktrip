@@ -20,6 +20,9 @@ class JTMainWindow : public QWidget
     QPushButton* m_btnStop;
     QLabel*      m_status;
 
+    unsigned int m_devIn;
+    unsigned int m_devOut;
+
   protected:
     void resizeEvent(QResizeEvent *event);
     void setIntOption(const char* opt, int val);
@@ -38,4 +41,6 @@ class JTMainWindow : public QWidget
     static constexpr const char* EXTRA_OPTS_JACKD = "OptsJackd";
     static constexpr const char* EXTRA_OPTS_BACKEND = "OptsBackend";
     static constexpr const char* WINDOW_SIZE = "WindowSize";
+    static constexpr const char* RT_INPUT_DEV = "RtInputDev";
+    static constexpr const char* RT_OUTPUT_DEV = "RtOutputDev";
 };

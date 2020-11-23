@@ -5,6 +5,7 @@
 #include <QtWidgets>
 #include <iostream>
 #include "Settings.h"
+#include "RtAudio.h"
 
 using std::cout; using std::endl;
 
@@ -114,6 +115,51 @@ JTMainWindow::JTMainWindow()
   conf_layout->addWidget(chk_rtaudio, row, 0, 1, 2);
   ++row;
 
+  QComboBox* cmb_in_dev = new QComboBox(this);
+  QComboBox* cmb_out_dev = new QComboBox(this);
+
+  RtAudio rta;
+  int n = rta.getDeviceCount();
+  m_devIn = rta.getDefaultInputDevice();
+  m_devOut = rta.getDefaultOutputDevice();
+  QString saved_in_dev = checkConfValue(conf, RT_INPUT_DEV, "").toString();
+  QString saved_out_dev = checkConfValue(conf, RT_OUTPUT_DEV, "").toString();
+  for (int j=0; j<n; ++j) {
+    auto devinfo = rta.getDeviceInfo(j);
+    if (0 < devinfo.inputChannels) {
+      QString dev_name = QString::fromStdString(devinfo.name)
+                         + QString(" (%1 ch)").arg(devinfo.inputChannels);
+      cmb_in_dev->addItem(dev_name, QVariant(j));
+      if (dev_name == saved_in_dev) {
+        m_devIn = j;
+        cmb_in_dev->setCurrentIndex(cmb_in_dev->count()-1);
+      } else if (m_devIn == j) {
+        cmb_in_dev->setCurrentIndex(cmb_in_dev->count()-1);
+      }
+    }
+    if (0 < devinfo.outputChannels) {
+      QString dev_name = QString::fromStdString(devinfo.name)
+                         + QString(" (%1 ch)").arg(devinfo.outputChannels);
+      cmb_out_dev->addItem(dev_name, QVariant(j));
+      if (dev_name == saved_out_dev) {
+        m_devOut = j;
+        cmb_out_dev->setCurrentIndex(cmb_out_dev->count()-1);
+      } else if (m_devOut == j) {
+        cmb_out_dev->setCurrentIndex(cmb_out_dev->count()-1);
+      }
+    }
+  }
+
+  int row_rtdevs = row;
+  conf_layout->addWidget(new QLabel("Input Device"), row, 0);
+  conf_layout->addWidget(cmb_in_dev, row, 1);
+  setGridRowVisibility(conf_layout, row, chk_rtaudio->isChecked());
+  ++row;
+  conf_layout->addWidget(new QLabel("Output Device"), row, 0);
+  conf_layout->addWidget(cmb_out_dev, row, 1);
+  setGridRowVisibility(conf_layout, row, chk_rtaudio->isChecked());
+  ++row;
+
   // Advanced Options
   QCheckBox* chk_advanced = new QCheckBox("Advanced settings for jack and jacktrip", this);
   chk_advanced->setChecked(checkConfValue(conf, SHOW_EXTRA_OPTS, 0).toBool());
@@ -161,12 +207,26 @@ JTMainWindow::JTMainWindow()
         bool client = cmb_mode->currentIndex() == 1 || cmb_mode->currentIndex() == 2;
         setGridRowVisibility(conf_layout, row_remaddr, client);
       });
+  connect(cmb_in_dev, QOverload<int>::of(&QComboBox::activated), this, [=] ()
+      {
+         setStringOption(RT_INPUT_DEV, cmb_in_dev->currentText());
+         m_devIn = cmb_in_dev->currentData().toUInt();
+      });
+  connect(rem_address, &QLineEdit::textChanged,
+                      this, [=] () {setStringOption(REMOTE_ADDRESS, rem_address->text());});
+  connect(cmb_out_dev, QOverload<int>::of(&QComboBox::activated), this, [=] ()
+      {
+         setStringOption(RT_OUTPUT_DEV, cmb_out_dev->currentText());
+         m_devOut = cmb_out_dev->currentData().toUInt();
+      });
   connect(rem_address, &QLineEdit::textChanged,
                       this, [=] () {setStringOption(REMOTE_ADDRESS, rem_address->text());});
   connect(chk_rtaudio, &QCheckBox::toggled, this, [=] () {
       setIntOption(USE_RT_AUDIO, chk_rtaudio->isChecked() ? 1 : 0);
       setGridRowVisibility(conf_layout, row_adv+2, chk_advanced->isChecked() && (!chk_rtaudio->isChecked()));
       setGridRowVisibility(conf_layout, row_adv+3, chk_advanced->isChecked() && (!chk_rtaudio->isChecked()));
+      setGridRowVisibility(conf_layout, row_rtdevs+0, chk_rtaudio->isChecked());
+      setGridRowVisibility(conf_layout, row_rtdevs+1, chk_rtaudio->isChecked());
       });
   connect(chk_advanced, &QCheckBox::toggled, this, [=] () {
       setIntOption(SHOW_EXTRA_OPTS, chk_advanced->isChecked() ? 1 : 0);
@@ -270,7 +330,9 @@ void JTMainWindow::start()
   if (conf.value(USE_RT_AUDIO).toBool()) {
     jacktrip_opts << "--rtaudio"
                   << "--srate" << conf.value(SAMPLE_RATE).toString()
-                  << "--bufsize" << conf.value(FRAMES).toString();
+                  << "--bufsize" << conf.value(FRAMES).toString()
+                  << "--devin" << QString::number(m_devIn)
+                  << "--devout" << QString::number(m_devOut);
   }
   if (conf.value(SHOW_EXTRA_OPTS).toBool()) {
     jacktrip_opts << conf.value(EXTRA_OPTS).toString().split(' ', QString::SkipEmptyParts);

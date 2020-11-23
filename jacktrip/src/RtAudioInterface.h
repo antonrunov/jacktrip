@@ -73,6 +73,8 @@ public:
   //--------------SETTERS---------------------------------------------
   /// \brief This has no effect in RtAudio
   virtual void setClientName(const char* /*ClientName*/) {}
+  virtual void setAudioDevices(unsigned int in_dev, unsigned int out_dev)
+  { mInDevId = in_dev; mOutDevId = out_dev; }
   //------------------------------------------------------------------
 
   //--------------GETTERS---------------------------------------------
@@ -91,7 +93,10 @@ private:
   int mNumOutChans; ///<  Number of Output Channels
   QVarLengthArray<float*> mInBuffer; ///< Vector of Input buffers/channel read from JACK
   QVarLengthArray<float*> mOutBuffer; ///< Vector of Output buffer/channel to write to JACK
-  RtAudio* mRtAudio; ///< RtAudio class
+  RtAudio* mRtAudioIn; ///< RtAudio class
+  RtAudio* mRtAudioOut; ///< RtAudio class
+  unsigned int mInDevId;
+  unsigned int mOutDevId;
 };
 
 #endif // __RTAUDIOINTERFACE_H__

@@ -41,7 +41,6 @@
 
 #include <cstdlib>
 
-
 using std::cout; using std::endl;
 
 
@@ -53,14 +52,18 @@ AudioInterface(jacktrip,
                NumInChans, NumOutChans,
                AudioBitResolution),
 mJackTrip(jacktrip),
-mRtAudio(NULL)
+mRtAudioIn(NULL),
+mRtAudioOut(NULL),
+mInDevId(0),
+mOutDevId(0)
 {}
 
 
 //*******************************************************************************
 RtAudioInterface::~RtAudioInterface()
 {
-  delete mRtAudio;
+  delete mRtAudioIn;
+  delete mRtAudioOut;
 }
 
 
@@ -75,31 +78,23 @@ void RtAudioInterface::setup()
 
   cout << "Settin Up Default RtAudio Interface" << endl;
   cout << gPrintSeparator << endl;
-  mRtAudio = new RtAudio;
-  if ( mRtAudio->getDeviceCount() < 1 ) {
+  mRtAudioIn = new RtAudio;
+  mRtAudioOut = new RtAudio;
+  if ( mRtAudioIn->getDeviceCount() < 1 ) {
     cout << "No audio devices found!" << endl;
     std::exit(0);
   }
 
-  // Get and print default devices
-  RtAudio::DeviceInfo info_input;
-  RtAudio::DeviceInfo info_output;
-
-  int deviceId_input; int deviceId_output;
-  // use default devices
-  deviceId_input = mRtAudio->getDefaultInputDevice();
-  deviceId_output = mRtAudio->getDefaultOutputDevice();
-
-  cout << "DEFAULT INPUT DEVICE  : " << endl;
-  printDeviceInfo(deviceId_input);
+  cout << "INPUT DEVICE  : " << endl;
+  printDeviceInfo(mInDevId);
   cout << gPrintSeparator << endl;
-  cout << "DEFAULT OUTPUT DEVICE : " << endl;
-  printDeviceInfo(deviceId_output);
+  cout << "OUTPUT DEVICE : " << endl;
+  printDeviceInfo(mOutDevId);
   cout << gPrintSeparator << endl;
 
   RtAudio::StreamParameters in_params, out_params;
-  in_params.deviceId = mRtAudio->getDefaultInputDevice();
-  out_params.deviceId = mRtAudio->getDefaultOutputDevice();
+  in_params.deviceId = mInDevId;
+  out_params.deviceId = mOutDevId;
   in_params.nChannels = getNumInputChannels();
   out_params.nChannels = getNumOutputChannels();
 
@@ -119,11 +114,14 @@ void RtAudioInterface::setup()
     // IMPORTANT NOTE: It's VERY important to remember to pass this
     // as the user data in the process callback, otherwise memeber won't
     // be accessible
-    mRtAudio->openStream(&out_params, &in_params, RTAUDIO_FLOAT32,
+    mRtAudioIn->openStream(NULL, &in_params, RTAUDIO_FLOAT32,
+                         sampleRate, &bufferFrames,
+                         &RtAudioInterface::wrapperRtAudioCallback, this, &options);
+    mRtAudioOut->openStream(&out_params, NULL, RTAUDIO_FLOAT32,
                          sampleRate, &bufferFrames,
                          &RtAudioInterface::wrapperRtAudioCallback, this, &options);
   }
-  catch ( RtError& e ) {
+  catch ( RtAudioError& e ) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
     exit( 0 );
   }
@@ -179,21 +177,25 @@ int RtAudioInterface::RtAudioCallback(void *outputBuffer, void *inputBuffer,
                                       unsigned int nFrames,
                                       double /*streamTime*/, RtAudioStreamStatus /*status*/)
 {
-  sample_t* inputBuffer_sample = (sample_t*) inputBuffer;
-  sample_t* outputBuffer_sample = (sample_t*) outputBuffer;
-
-  // Get input and output buffers
-  //-------------------------------------------------------------------
-  for (int i = 0; i < mNumInChans; i++) {
-    // Input Ports are READ ONLY
-    mInBuffer[i] = inputBuffer_sample+(nFrames*i);
-  }
-  for (int i = 0; i < mNumOutChans; i++) {
-    // Output Ports are WRITABLE
-    mOutBuffer[i] = outputBuffer_sample+(nFrames*i);
+  if (NULL != inputBuffer) {
+    sample_t* inputBuffer_sample = (sample_t*) inputBuffer;
+    for (int i = 0; i < mNumInChans; i++) {
+      // Input Ports are READ ONLY
+      mInBuffer[i] = inputBuffer_sample+(nFrames*i);
+    }
+    AudioInterface::computeProcessToNetwork(mInBuffer, nFrames);
   }
 
-  AudioInterface::callback(mInBuffer, mOutBuffer, nFrames);
+  if (NULL != outputBuffer) {
+    sample_t* outputBuffer_sample = (sample_t*) outputBuffer;
+    for (int i = 0; i < mNumOutChans; i++) {
+      // Output Ports are WRITABLE
+      mOutBuffer[i] = outputBuffer_sample+(nFrames*i);
+    }
+    AudioInterface::computeProcessFromNetwork(mOutBuffer, nFrames);
+  }
+
+  //AudioInterface::callback(mInBuffer, mOutBuffer, nFrames);
   return 0;
 }
 
@@ -212,8 +214,8 @@ int RtAudioInterface::wrapperRtAudioCallback(void *outputBuffer, void *inputBuff
 //*******************************************************************************
 int RtAudioInterface::startProcess() const
 {
-  try { mRtAudio->startStream(); }
-  catch ( RtError& e ) {
+  try { mRtAudioIn->startStream(); mRtAudioOut->startStream(); }
+  catch ( RtAudioError& e ) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
     return(-1);
   }
@@ -224,8 +226,8 @@ int RtAudioInterface::startProcess() const
 //*******************************************************************************
 int RtAudioInterface::stopProcess() const
 {
-  try { mRtAudio->closeStream(); }
-  catch ( RtError& e ) {
+  try { mRtAudioIn->closeStream(); mRtAudioOut->closeStream(); }
+  catch ( RtAudioError& e ) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
     return(-1);
   }

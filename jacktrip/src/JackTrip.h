@@ -257,6 +257,8 @@ public:
   { mSampleRate = sample_rate; }
   void setAudioBufferSizeInSamples(uint32_t buf_size)
   { mAudioBufferSize = buf_size; }
+  void setRtAudioDevices(unsigned int in_id, unsigned int out_id)
+  { mInDevId = in_id; mOutDevId = out_id; }
 
   JackTrip::connectionModeT getConnectionMode() const
   { return mConnectionMode; }
@@ -461,6 +463,8 @@ private:
   volatile bool mReceivedConnection; ///< Bool of received connection from peer
   volatile bool mTcpConnectionError;
   volatile bool mStopped;
+  unsigned int mInDevId;
+  unsigned int mOutDevId;
 };
 
 #endif

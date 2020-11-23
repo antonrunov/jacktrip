@@ -101,7 +101,9 @@ JackTrip::JackTrip(jacktripModeT JacktripMode,
   mConnectionMode(JackTrip::NORMAL),
   mReceivedConnection(false),
   mTcpConnectionError(false),
-  mStopped(false)
+  mStopped(false),
+  mInDevId(0),
+  mOutDevId(0)
 {
   createHeader(mPacketHeaderType);
 }
@@ -155,6 +157,7 @@ void JackTrip::setupAudio()
     mAudioInterface = new RtAudioInterface(this, mNumChans, mNumChans, mAudioBitResolution);
     mAudioInterface->setSampleRate(mSampleRate);
     mAudioInterface->setBufferSizeInSamples(mAudioBufferSize);
+    mAudioInterface->setAudioDevices(mInDevId, mOutDevId);
     mAudioInterface->setup();
 #endif
   }

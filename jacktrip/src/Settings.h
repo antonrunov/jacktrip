@@ -125,6 +125,8 @@ private:
   bool mChanfeDefaultBS; ///< Change Default Buffer Size
   unsigned int mSampleRate;
   unsigned int mAudioBufferSize;
+  unsigned int mRtAudioInputDevId;
+  unsigned int mRtAudioOutputDevId;
 };
 
 #endif

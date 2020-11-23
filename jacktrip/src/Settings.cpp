@@ -72,7 +72,10 @@ Settings::Settings() :
     mRedundancy(1),
     mUseJack(true),
     mChanfeDefaultSR(false),
-    mChanfeDefaultBS(false)
+    mChanfeDefaultBS(false),
+    mSampleRate(0),
+    mRtAudioInputDevId(0),
+    mRtAudioOutputDevId(0)
 {}
 
 //*******************************************************************************
@@ -122,6 +125,8 @@ void Settings::parseInput(int argc, char** argv)
         { "rtaudio", no_argument, NULL, 'R' }, // Run in JamLink mode
         { "srate", required_argument, NULL, 'T' }, // Set Sample Rate
         { "bufsize", required_argument, NULL, 'F' }, // Set buffer Size
+        { "devin", required_argument, NULL, 'd' }, // Input device id
+        { "devout", required_argument, NULL, 'k' }, // Output device id
         { "version", no_argument, NULL, 'v' }, // Version Number
         { "help", no_argument, NULL, 'h' }, // Print Help
         { NULL, 0, NULL, 0 }
@@ -133,7 +138,7 @@ void Settings::parseInput(int argc, char** argv)
     int ch;
     optind = 0;
     while ( (ch = getopt_long(argc, argv,
-                              "n:sc:SC:o:B:P:q:r:b:zljeJ:RT:F:vh", longopts, NULL)) != -1 )
+                              "n:sc:SC:o:B:P:q:r:b:zljeJ:RT:F:d:k:vh", longopts, NULL)) != -1 )
         switch (ch) {
 
         case 'n': // Number of input and output channels
@@ -244,6 +249,14 @@ void Settings::parseInput(int argc, char** argv)
             //-------------------------------------------------------
             mChanfeDefaultBS = true;
             mAudioBufferSize = atoi(optarg);
+            break;
+        case 'd': // Input Device Id
+            //-------------------------------------------------------
+            mRtAudioInputDevId = atoi(optarg);
+            break;
+        case 'k': // Output Device Id
+            //-------------------------------------------------------
+            mRtAudioOutputDevId = atoi(optarg);
             break;
         case 'v':
             //-------------------------------------------------------
@@ -412,6 +425,7 @@ void Settings::startJackTrip()
 #ifdef __RT_AUDIO__
         if (!mUseJack) {
             mJackTrip->setAudiointerfaceMode(JackTrip::RTAUDIO);
+            mJackTrip->setRtAudioDevices(mRtAudioInputDevId, mRtAudioOutputDevId);
         }
 #endif
 

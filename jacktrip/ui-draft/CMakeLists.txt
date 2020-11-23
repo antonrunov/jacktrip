@@ -19,9 +19,12 @@ elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   add_definitions(-D__LINUX__ -D__LINUX_ALSA__)
   find_library(LIBASOUND asound)
   set(extra_libs ${LIBASOUND} -lpthread)
+  #add_definitions(-D__LINUX_PULSE__)
+  #set(extra_libs ${extra_libs} -lpulse-simple -lpulse)
 endif()
 
 add_definitions(-D__RT_AUDIO__)
+include_directories("../externals/rtaudio-5.1.0")
 
 find_library(LIBJACK jack)
 
@@ -41,7 +44,7 @@ set(jacktrip_SRC
   ../src/AudioInterface.cpp
   ../src/RtAudioInterface.cpp
   ../src/JackAudioInterface.cpp
-  ../externals/includes/rtaudio-4.0.7/RtAudio.cpp
+  ../externals/rtaudio-5.1.0/RtAudio.cpp
 )
 
 set(jacktrip_ui_SRC
