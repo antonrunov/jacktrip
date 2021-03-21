@@ -91,7 +91,7 @@ JackTrip::JackTrip(jacktripModeT JacktripMode,
     #endif // endwhere
     mBufferQueueLength(BufferQueueLength),
     mBufferStrategy(1),
-    mMonitorQueueLength(0),
+    mBroadcastQueueLength(0),
     mSampleRate(gDefaultSampleRate),
     mDeviceID(gDefaultDeviceID),
     mAudioBufferSize(gDefaultBufferSizeInSamples),
@@ -171,8 +171,8 @@ void JackTrip::setupAudio(
 #endif // endwhere
 
         mAudioInterface->setClientName(mJackClientName);
-        if (0 < mMonitorQueueLength) {
-          mAudioInterface->enableMonitorOutput();
+        if (0 < mBroadcastQueueLength) {
+            mAudioInterface->enableBroadcastOutput();
         }
 
         if (gVerboseFlag) std::cout << "  JackTrip:setupAudio before mAudioInterface->setup" << std::endl;
@@ -208,6 +208,12 @@ void JackTrip::setupAudio(
     std::cout << "The Audio Buffer Size is: " << mAudioBufferSize << " samples" << std::endl;
     std::cout << "                      or: " << AudioBufferSizeInBytes
               << " bytes" << std::endl;
+    if (0 < mBroadcastQueueLength) {
+        std::cout << gPrintSeparator << std::endl;
+        cout << "Broadcast Output is enabled, delay = "
+             << mBroadcastQueueLength * mAudioBufferSize * 1000 / mSampleRate << " ms"
+             << " (" << mBroadcastQueueLength * mAudioBufferSize << " samples)" << endl;
+    }
     std::cout << gPrintSeparator << std::endl;
     cout << "The Number of Channels is: " << mAudioInterface->getNumInputChannels() << endl;
     std::cout << gPrintSeparator << std::endl;
@@ -278,8 +284,11 @@ void JackTrip::setupRingBuffers()
     /// \todo Make all this operations cleaner
     //int total_audio_packet_size = getTotalAudioPacketSizeInBytes();
     int slot_size = getRingBuffersSlotSize();
-    if (-1 != mBufferStrategy) {
+    if (0 <=  mBufferStrategy) {
         mUnderRunMode = ZEROS;
+    }
+    else if (0 > mBufferQueueLength) {
+      throw std::invalid_argument("Auto queue is not supported by RingBuffer");
     }
 
     switch (mUnderRunMode) {
@@ -303,12 +312,13 @@ void JackTrip::setupRingBuffers()
                                                 mBufferQueueLength);
         }
         else {
-            int total_size = mSampleRate * mNumChans * mAudioBitResolution; // 1 sec of audio
-            cout << "Using JitterBuffer strategy " << mBufferStrategy
-                 << ", total_size=" << total_size << endl;
-            mReceiveRingBuffer = new JitterBuffer(slot_size, mBufferQueueLength*slot_size,
-                                        total_size, mBufferStrategy,
-                                        mMonitorQueueLength*slot_size, mNumChans, mAudioBitResolution);
+            cout << "Using JitterBuffer strategy " << mBufferStrategy << endl;
+            if (0 > mBufferQueueLength) {
+                cout << "Using AutoQueue 1/" << -mBufferQueueLength << endl;
+            }
+            mReceiveRingBuffer = new JitterBuffer(mAudioBufferSize, mBufferQueueLength,
+                                        mSampleRate, mBufferStrategy,
+                                        mBroadcastQueueLength, mNumChans, mAudioBitResolution);
         }
         /*
     mSendRingBuffer = new RingBuffer(mAudioInterface->getSizeInBytesPerChannel() * mNumChans,
@@ -513,8 +523,10 @@ void JackTrip::onStatTimer()
       << "/" << recv_io_stat.buf_dec_pktloss
       << " skew: " << recv_io_stat.skew
       << "/" << recv_io_stat.skew_raw
-      << " monitor: " << recv_io_stat.monitor_skew
-      << "/" << recv_io_stat.monitor_delta
+      << " bcast: " << recv_io_stat.broadcast_skew
+      << "/" << recv_io_stat.broadcast_delta
+      << " autoq: " << 0.1*recv_io_stat.autoq_corr
+      << "/" << 0.1*recv_io_stat.autoq_rate
       << endl;
 }
 

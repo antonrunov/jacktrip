@@ -40,7 +40,6 @@
 #include "JackTrip.h"
 
 #include <QHostInfo>
-#include <QRandomGenerator>
 
 #include <cstring>
 #include <iostream>
@@ -414,8 +413,8 @@ void UdpDataProtocol::run()
     mAudioPacket = new int8_t[audio_packet_size];
     std::memset(mAudioPacket, 0, audio_packet_size); // set buffer to 0
     mBuffer.resize(audio_packet_size, 0);
-    m_chans = mJackTrip->getNumChannels();
-    m_smplSize = mJackTrip->getAudioBitResolution() / 8;
+    mChans = mJackTrip->getNumChannels();
+    mSmplSize = mJackTrip->getAudioBitResolution() / 8;
 
     // Setup Full Packet buffer
     int full_packet_size = mJackTrip->getPacketSizeInBytes();
@@ -528,7 +527,7 @@ void UdpDataProtocol::run()
 
         int peer_chans = mJackTrip->getPeerNumChannels(full_redundant_packet);
         full_packet_size = mJackTrip->getHeaderSizeInBytes()
-                           + mJackTrip->getPeerBufferSize(full_redundant_packet) * peer_chans * m_smplSize;
+                           + mJackTrip->getPeerBufferSize(full_redundant_packet) * peer_chans * mSmplSize;
         /*
         cout << "peer sizes: " << mJackTrip->getHeaderSizeInBytes()
              << " + " << mJackTrip->getPeerBufferSize(full_redundant_packet)
@@ -551,6 +550,8 @@ void UdpDataProtocol::run()
         mTotCount = 0;
         mLostCount = 0;
         mOutOfOrderCount = 0;
+        mLastOutOfOrderCount = 0;
+        mInitialState = true;
         mRevivedCount = 0;
         mStatCount = 0;
 
@@ -673,7 +674,7 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
                    full_redundant_packet_size);
 
     if (0.0 < mSimulatedLossRate || 0.0 < mSimulatedJitterRate) {
-        double x = QRandomGenerator::global()->generateDouble();
+        double x = mUniformDist(mRndEngine);
         // Drop packets
         x -= mSimulatedLossRate;
         if (0 > x) {
@@ -682,7 +683,7 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
         // Delay packets
         x -= mSimulatedJitterRate;
         if (0 > x) {
-            usleep(QRandomGenerator::global()->bounded(mSimulatedJitterMaxDelay*1e6));
+            usleep(mUniformDist(mRndEngine) * mSimulatedJitterMaxDelay * 1e6);
         }
     }
 
@@ -692,11 +693,16 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     current_seq_num = newer_seq_num;
 
     int16_t lost = 0;
-    if (0 != last_seq_num) {
+    if (!mInitialState) {
         lost = newer_seq_num - last_seq_num - 1;
-        if (0 > lost) {
+        if (0 > lost || 1000 < lost) {
             // Out of order packet, should be ignored
             ++mOutOfOrderCount;
+            if (5 < ++mLastOutOfOrderCount) {
+                mInitialState = true;
+                mStatCount = 0;
+                mTotCount = 0;
+            }
             return;
         }
         else if (0 != lost) {
@@ -704,6 +710,8 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
         }
         mTotCount += 1 + lost;
     }
+    mLastOutOfOrderCount = 0;
+    mInitialState = false;
 
     //cout << current_seq_num << " ";
     int redun_last_index = 0;
@@ -724,9 +732,9 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
 
     int peer_chans = mJackTrip->getPeerNumChannels(full_redundant_packet);
     int N = mJackTrip->getPeerBufferSize(full_redundant_packet);
-    int host_buf_size = N * m_chans * m_smplSize;
+    int host_buf_size = N * mChans * mSmplSize;
     int hdr_size = mJackTrip->getHeaderSizeInBytes();
-    int gap_size = (0 == last_seq_num) ? 0 : (lost - redun_last_index) * host_buf_size;
+    int gap_size = mInitialState ? 0 : (lost - redun_last_index) * host_buf_size;
 
     last_seq_num = newer_seq_num; // Save last read packet
 
@@ -736,13 +744,13 @@ void UdpDataProtocol::receivePacketRedundancy(QUdpSocket& UdpSocket,
     // Send to audio all available audio packets, in order
     for (int i = redun_last_index; i>=0; i--) {
         int8_t* src = full_redundant_packet + (i*full_packet_size) + hdr_size;
-        if (1 != m_chans) {
+        if (1 != mChans) {
             // Convert packet's non-interleaved layout to interleaved one used internally
             int8_t* dst = mBuffer.data();
-            int C = qMin(m_chans, peer_chans);
+            int C = qMin(mChans, peer_chans);
             for (int n=0; n<N; ++n) {
                 for (int c=0; c<C; ++c) {
-                    memcpy(dst + (n*m_chans + c)*m_smplSize, src + (n + c*N)*m_smplSize, m_smplSize);
+                    memcpy(dst + (n*mChans + c)*mSmplSize, src + (n + c*N)*mSmplSize, mSmplSize);
                 }
             }
             src = dst;
@@ -779,6 +787,11 @@ void UdpDataProtocol::setIssueSimulation(double loss, double jitter, double max_
     mSimulatedLossRate = loss;
     mSimulatedJitterRate = jitter;
     mSimulatedJitterMaxDelay = max_delay;
+
+    std::random_device r;
+    mRndEngine = std::default_random_engine(r());
+    mUniformDist = std::uniform_real_distribution<double>(0.0, 1.0);
+
     cout << "Simulating network issues: "
       "loss_rate=" << loss << ", jitter_rate=" << jitter << ", jitter_max_delay=" << max_delay << endl;
 }
@@ -790,13 +803,13 @@ void UdpDataProtocol::sendPacketRedundancy(int8_t* full_redundant_packet,
 {
     mJackTrip->readAudioBuffer( mAudioPacket );
     int8_t* src = mAudioPacket;
-    if (1 != m_chans) {
+    if (1 != mChans) {
         // Convert internal interleaved layout to non-interleaved
-        int N = getAudioPacketSizeInBites() / m_chans / m_smplSize;
+        int N = getAudioPacketSizeInBites() / mChans / mSmplSize;
         int8_t* dst = mBuffer.data();
         for (int n=0; n<N; ++n) {
-            for (int c=0; c<m_chans; ++c) {
-                memcpy(dst + (n + c*N)*m_smplSize, src + (n*m_chans + c)*m_smplSize, m_smplSize);
+            for (int c=0; c<mChans; ++c) {
+                memcpy(dst + (n + c*N)*mSmplSize, src + (n*mChans + c)*mSmplSize, mSmplSize);
             }
         }
         src = dst;

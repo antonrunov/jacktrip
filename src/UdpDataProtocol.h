@@ -45,6 +45,7 @@
 #include <QHostAddress>
 #include <QMutex>
 #include <vector>
+#include <random>
 
 #include "DataProtocol.h"
 #include "jacktrip_types.h"
@@ -215,8 +216,10 @@ private:
     int8_t* mAudioPacket; ///< Buffer to store Audio Packets
     int8_t* mFullPacket; ///< Buffer to store Full Packet (audio+header)
     std::vector<int8_t> mBuffer;
-    int m_chans;
-    int m_smplSize;
+    int mChans;
+    int mSmplSize;
+    int mLastOutOfOrderCount;
+    bool mInitialState;
 
     unsigned int mUdpRedundancyFactor; ///< Factor of redundancy
     static QMutex sUdpMutex; ///< Mutex to make thread safe the binding process
@@ -227,9 +230,12 @@ private:
     std::atomic<uint32_t>  mRevivedCount;
     uint32_t  mStatCount;
 
+    // packet loss/jitter simulation
     double mSimulatedLossRate;
     double mSimulatedJitterRate;
     double mSimulatedJitterMaxDelay;
+    std::default_random_engine mRndEngine;
+    std::uniform_real_distribution<double> mUniformDist;
 };
 
 #endif // __UDPDATAPROTOCOL_H__
